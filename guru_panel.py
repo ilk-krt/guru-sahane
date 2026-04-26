@@ -1,103 +1,112 @@
 import streamlit as st
 import yfinance as yf
 import pandas as pd
-import numpy as np
+import pandas_ta as ta
+import plotly.express as px
+from datetime import datetime, timedelta
 
-# --- 1. AYARLAR ---
-st.set_page_config(page_title="GURU V3: ŞAHANE", layout="wide")
+# ==========================================
+# 1. MASTER SEKTÖR & ALT SEKTÖR HARİTASI (V129.5)
+# ==========================================
+st.set_page_config(page_title="Aether Deep Scanner", layout="wide")
+st.title("🛰️ Aether V129.5 - Deep Sector Scanner")
 
-# --- 2. SEKTÖREL LİSTE (7 HİSSE) ---
-sektorler = {
-    "Havacılık": ["THYAO.IS", "PGSUS.IS", "TAVHL.IS", "DOCO.IS", "CLEBI.IS", "GSDHO.IS", "AYGAZ.IS"],
-    "Bankacılık": ["ISCTR.IS", "AKBNK.IS", "GARAN.IS", "YKBNK.IS", "HALKB.IS", "VAKBN.IS", "TSKB.IS"],
-    "Enerji": ["EUPWR.IS", "ASTOR.IS", "SMRTG.IS", "KONTR.IS", "ENJSA.IS", "ALARK.IS", "ODAS.IS"],
-    "Perakende": ["BIMAS.IS", "MGROS.IS", "SOKM.IS", "AEFES.IS", "CCOLA.IS", "MAVI.IS", "VAKKO.IS"],
-    "Otomotiv": ["FROTO.IS", "TOASO.IS", "DOAS.IS", "TTRAK.IS", "OTKAR.IS", "TMSN.IS", "ASUZU.IS"],
-    "Sanayi": ["EREGL.IS", "KRDMD.IS", "SAHOL.IS", "KCHOL.IS", "SISE.IS", "TUPRS.IS", "ARCLK.IS"]
+MASTER_MAP = {
+    "TEKNOLOJİ (XLK)": {
+        "Main": "XLK",
+        "Subs": {"Yarı İletkenler": "SMH", "Siber Güvenlik": "CIBR", "Yazılım & SaaS": "IGV", "AI & Robotik": "BOTZ", "Fintech": "ARKF"}
+    },
+    "SANAYİ & HAVACILIK (XLI)": {
+        "Main": "XLI",
+        "Subs": {"Savunma & Uzay": "ITA", "Lojistik": "IYT", "Altyapı": "PAVE", "Hava Yolları": "JETS"}
+    },
+    "ENERJİ (XLE)": {
+        "Main": "XLE",
+        "Subs": {"Petrol & Gaz Arama": "XOP", "Ekipman & Servis": "OIH", "Uranyum": "URA", "Yenilenebilir": "ICLN"}
+    },
+    "SAĞLIK (XLV)": {
+        "Main": "XLV",
+        "Subs": {"Biyoteknoloji": "XBI", "Tıbbi Cihazlar": "IHI", "Genomik": "ARKG"}
+    },
+    "FİNANS (XLF)": {
+        "Main": "XLF",
+        "Subs": {"Bölgesel Bankalar": "KRE", "Sigortacılık": "KIE", "Sermaye Piyasaları": "IAI"}
+    },
+    "KEYFİ TÜKETİM (XLY)": {
+        "Main": "XLY",
+        "Subs": {"Perakende": "XRT", "Konut İnşaatı": "XHB", "E-Ticaret": "IBUY", "Eğlence/Kumar": "BETZ"}
+    },
+    "HAM MADDELER (XLB)": {
+        "Main": "XLB",
+        "Subs": {"Madencilik": "XME", "Altın Madencileri": "GDX", "Lityum": "LIT"}
+    },
+    "DİĞER KRİTİK": {
+        "Main": "SPY",
+        "Subs": {"İletişim (XLC)": "XLC", "Gayrimenkul (XLRE)": "XLRE", "Temel Tüketim (XLP)": "XLP", "Kamu Hizmetleri (XLU)": "XLU"}
+    }
 }
 
-# --- 3. SIDEBAR: KOMUTA MERKEZİ ---
-st.sidebar.title("🏹 ŞAHANE")
-secilen_sektor = st.sidebar.selectbox("Sektör Seç", list(sektorler.keys()))
-secilen_hisse = st.sidebar.selectbox("Hisse Seç", sektorler[secilen_sektor])
-
-st.sidebar.divider()
-use_manual = st.sidebar.toggle("MANUEL OVERRIDE")
-
-if use_manual:
-    m_price = st.sidebar.number_input("Güncel Fiyat", value=100.0)
-    m_eps = st.sidebar.number_input("Hisse Başı Kar (EPS)", value=5.0)
-    m_bvps = st.sidebar.number_input("Defter Değeri (BVPS)", value=40.0)
-    m_fcf_ps = st.sidebar.number_input("Hisse Başı Nakit (FCF PS)", value=8.0)
-    m_favok_ps = st.sidebar.number_input("Hisse Başı FAVÖK (EBITDA PS)", value=12.0)
-
-# --- 4. VERİ ÇEKME ---
-def get_full_info():
-    try:
-        t = yf.Ticker(secilen_hisse)
-        i = t.info
-        if use_manual:
-            return m_price, m_eps, m_bvps, m_fcf_ps, m_favok_ps, 0, 0
+# ==========================================
+# 2. HESAPLAMA MOTORU (RRG + AETHER LOGIC)
+# ==========================================
+def get_analysis(tickers, benchmark="SPY"):
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=250)
+    data = yf.download(list(tickers) + [benchmark], start=start_date, end=end_date, progress=False)['Close']
+    
+    results = []
+    for t in tickers:
+        # RRG Mantığı
+        rs = (data[t] / data[benchmark]) * 100
+        mom = ta.roc(rs, length=14) + 100
         
-        p = i.get('currentPrice', 0.01)
-        eps = i.get('trailingEps', 0)
-        bvps = i.get('bookValue', 0)
-        fk = i.get('trailingPE', 0)
-        pddd = i.get('priceToBook', 0)
-        sh = i.get('sharesOutstanding', 1)
-        fcf_ps = i.get('freeCashflow', 0) / sh if sh > 0 else 0
-        fav_ps = i.get('ebitda', 0) / sh if sh > 0 else 0
-        return p, eps, bvps, fcf_ps, fav_ps, fk, pddd
-    except:
-        return 0.01, 0, 0, 0, 0, 0, 0
+        # Aether Logic (ŞAHANE)
+        df = pd.DataFrame(data[t]).rename(columns={t: 'Close'})
+        ema1 = ta.ema(df['Close'], length=1)
+        ema12 = ta.ema(df['Close'], length=12)
+        slope = (df['Close'] > df['Close'].shift(1)) & (df['Close'].shift(1) > df['Close'].shift(2))
+        stage2 = (df['Close'] > ta.sma(df['Close'], 150))
+        
+        signal = "✅ BUY" if (ema1.iloc[-1] > ema12.iloc[-1]) and slope.iloc[-1] and stage2.iloc[-1] else "⏳ BEKLE"
+        
+        results.append({
+            "Ticker": t,
+            "RS": round(rs.iloc[-1], 2),
+            "Momentum": round(mom.iloc[-1], 2),
+            "Aether Sinyal": signal
+        })
+    return pd.DataFrame(results)
 
-p, eps, bvps, fcf_ps, fav_ps, fk, pddd = get_full_info()
+# ==========================================
+# 3. KOKPİT ARAYÜZÜ (GÖRSELLEŞTİRME)
+# ==========================================
+st.sidebar.header("🕹️ Kontrol Paneli")
+selected_main = st.sidebar.selectbox("Ana Sektör Seçin", list(MASTER_MAP.keys()))
 
-# --- 5. HESAPLAMALAR ---
-graham = np.sqrt(22.5 * eps * bvps) if (eps > 0 and bvps > 0) else 0
-fcf_target = fcf_ps * 15
-favok_target = fav_ps * 8
-avg_fair = (graham + fcf_target + favok_target) / 3 if graham > 0 else (fcf_target + favok_target) / 2
+main_ticker = MASTER_MAP[selected_main]["Main"]
+sub_dict = MASTER_MAP[selected_main]["Subs"]
 
-# --- 6. EKRAN ÇIKTISI ---
-st.title(f"📊 {secilen_hisse} Analiz Paneli")
+st.subheader(f"🔍 {selected_main} - Mikroskop Analizi")
+col1, col2 = st.columns([1, 1])
 
-# Mevcut Piyasa Verileri (Eksik kalan kısımlar)
-col_a, col_b, col_c, col_d = st.columns(4)
-col_a.metric("Güncel Fiyat", f"{p:.2f} TL")
-col_b.metric("F/K Oranı", f"{fk:.2f}" if not use_manual else "MANUEL")
-col_c.metric("PD/DD Oranı", f"{pddd:.2f}" if not use_manual else "MANUEL")
-col_d.metric("EPS (Kâr)", f"{eps:.2f}")
+# Verileri Çek
+with st.spinner("Veriler işleniyor..."):
+    analysis_df = get_analysis([main_ticker] + list(sub_dict.values()))
 
-st.divider()
-
-# Değerleme Hedefleri
-col1, col2, col3 = st.columns(3)
 with col1:
-    st.subheader("1. GRAHAM")
-    st.title(f"{graham:.2f}")
+    st.write("📊 **Sinyal ve Güç Tablosu**")
+    st.dataframe(analysis_df.style.applymap(
+        lambda x: 'background-color: #004d00; color: white' if x == "✅ BUY" else '', subset=['Aether Sinyal']
+    ), use_container_width=True)
 
 with col2:
-    st.subheader("2. FCF (15x)")
-    st.title(f"{fcf_target:.2f}")
+    st.write("🎯 **Alt Sektör Rotasyonu (RRG)**")
+    fig = px.scatter(analysis_df, x="RS", y="Momentum", text="Ticker", color="Aether Sinyal",
+                     color_discrete_map={"✅ BUY": "green", "⏳ BEKLE": "orange"})
+    fig.add_hline(y=100, line_dash="dash")
+    fig.add_vline(x=100, line_dash="dash")
+    st.plotly_chart(fig, use_container_width=True)
 
-with col3:
-    st.subheader("3. FD/FAVÖK (8x)")
-    st.title(f"{favok_target:.2f}")
-
-st.divider()
-
-# Stratejik Sinyal (Sadece Sembol)
-c1, c2 = st.columns(2)
-with c1:
-    st.subheader("ORTALAMA HEDEF")
-    st.header(f"{avg_fair:.2f} TL")
-
-with c2:
-    st.subheader("SİNYAL")
-    if p < avg_fair:
-        st.title("✅")
-    else:
-        st.title("⛔")
-
-st.caption("GURU V3 'ŞAHANE' - Graham, FCF ve FAVÖK temelli tam hesaplama.")
+# "Smart Money" Takibi İçin Uyarı Notu
+top_sub = analysis_df.iloc[analysis_df['RS'].idxmax()]
+st.info(f"💡 **Smart Money Notu:** Şu an {selected_main} içinde en yüksek sermaye gücü (RS) **{top_sub['Ticker']}** odasında toplanmış görünüyor.")
