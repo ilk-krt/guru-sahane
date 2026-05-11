@@ -24,6 +24,11 @@ st.markdown("""
     ul[role="listbox"] li { color: #ffffff !important; background-color: #1a1a1a !important; }
     ul[role="listbox"] li:hover { background-color: #333333 !important; color: #00ff88 !important; }
     
+    /* Dataframe ve Tablo Görünümleri */
+    [data-testid="stTable"], [data-testid="stDataFrame"] { background-color: #111111 !important; }
+    th { background-color: #222222 !important; color: #00ff88 !important; border-bottom: 1px solid #444 !important; }
+    td { border-bottom: 1px solid #333 !important; color: #ffffff !important; }
+    
     /* Expander (Açılır Sekmeler) */
     [data-testid="stExpander"] { background-color: #111111 !important; border: 1px solid #333 !important; border-radius: 8px !important; }
     [data-testid="stExpander"] summary p { color: #00ff88 !important; font-weight: bold !important; font-size: 1.1rem !important; }
@@ -34,6 +39,7 @@ st.markdown("""
     
     /* Özel Kutular */
     .deep-analysis-box { background: linear-gradient(145deg, #111 0%, #1a1a1a 100%); border-left: 4px solid #f1c40f; padding: 20px; border-radius: 5px; font-size: 0.95rem; line-height: 1.6; margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.5); }
+    .deep-analysis-title { color: #f1c40f !important; font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid #333; padding-bottom: 10px; margin-bottom: 15px; }
     .news-timeline { border-left: 2px solid #444; margin-left: 10px; padding-left: 15px; }
     .news-item { margin-bottom: 15px; position: relative; }
     .news-item::before { content: ''; position: absolute; left: -21px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background-color: #00ff88; }
@@ -42,11 +48,13 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-if 'active_trigger' not in st.session_state: st.session_state.active_trigger = "NEUTRAL"
-if 'active_sector' not in st.session_state: st.session_state.active_sector = None
+if 'active_trigger' not in st.session_state: 
+    st.session_state.active_trigger = "NEUTRAL"
+if 'active_sector' not in st.session_state: 
+    st.session_state.active_sector = None
 
 # ==========================================
-# 1. GENİŞLETİLMİŞ VERİ HARİTASI (Tüm Hisselerin Dağıtımı)
+# 1. GENİŞLETİLMİŞ VERİ HARİTASI
 # ==========================================
 GLOBAL_MAP = {
     "Teknoloji (XLK)": ["SMH", "SOXX", "CIBR", "IGV", "BOTZ", "ARKF"],
@@ -61,13 +69,12 @@ GLOBAL_MAP = {
     "Kamu (XLU)": ["PHO"]
 }
 
-# Senin devasa portföy listendeki tüm hisseler alt sektörlere yedirildi.
 ETF_INFO = {
     "SMH": {"area": "Yarı İletken Devleri", "stocks": ["NVDA", "TSM", "AVGO", "ASML", "AMD", "MU", "INTC", "ARM"]},
     "SOXX": {"area": "Çip Ekosistemi", "stocks": ["TXN", "AMAT", "QCOM", "ADI", "MCHP", "CRDO", "AXTI"]},
     "BOTZ": {"area": "Endüstriyel AI & Bulut", "stocks": ["ISRG", "SMCI", "AI", "IONQ", "NBIS"]},
-    "CIBR": {"area": "Siber Güvenlik", "stocks": ["PANW", "CRWD", "FTNT", "NET", "ZS", "S", "EXTR", "DT"]},
-    "IGV": {"area": "Kurumsal Yazılım", "stocks": ["ADBE", "CRM", "MSFT", "NOW", "SNOW", "OUST", "ONDS"]},
+    "CIBR": {"area": "Siber Güvenlik", "stocks": ["PANW", "CRWD", "FTNT", "NET", "ZS", "S", "EXTR", "DT", "OUST", "ONDS"]},
+    "IGV": {"area": "Kurumsal Yazılım", "stocks": ["ADBE", "CRM", "MSFT", "NOW", "SNOW"]},
     "ARKF": {"area": "FinTech", "stocks": ["COIN", "SQ", "MELI", "PYPL", "MA", "PGY"]},
     "ITA": {"area": "Savunma Sanayi", "stocks": ["RTX", "LMT", "BA", "GD", "NOC", "KTOS"]},
     "XAR": {"area": "Uzay Teknolojileri", "stocks": ["RKLB", "SPCE", "SIDU", "SPIR", "BKSY", "SATL"]},
@@ -176,10 +183,8 @@ def draw_battery_with_delta(label, current, previous, delta_icon):
 def draw_smart_money_flow(trigger_data):
     dot = graphviz.Digraph()
     
-    # Sıkıştırmayı kaldırıp Yüksek Çözünürlük (DPI 300) tanımlıyoruz
+    # Yüksek çözünürlük, sığdırma (size) kısıtlamasının kaldırılması
     dot.attr(bgcolor='#050505', rankdir='LR', dpi='300')
-    
-    # Kutu boyutlarını, kenar boşluklarını ve global font büyüklüğünü devasa yapıyoruz
     dot.attr('node', fontsize='28', fontname='Arial', margin='0.3,0.1')
     dot.attr('edge', fontsize='24')
     
@@ -198,8 +203,6 @@ def draw_smart_money_flow(trigger_data):
         c.node("REAL", "Gayrimenkul", shape='box', style='filled', fillcolor='#827717', fontcolor='white', height='1.5')
 
     bat = trigger_data['battery']
-    
-    # Ok kalınlıklarını da devasa grafik yapısına uyumlu olacak şekilde artırdık
     def get_pen(val): return str(max(3.0, val / 6))
     def get_col(val): return "#00ff88" if val >= 60 else "#ff3333" if val <= 40 else "#888"
 
@@ -213,8 +216,34 @@ def draw_smart_money_flow(trigger_data):
     dot.edge("USD", "GOLD", color=get_col(bat['Commodities']), penwidth=get_pen(bat['Commodities']))
     dot.edge("COMM", "REAL", color=get_col(bat['RealEstate']), penwidth=get_pen(bat['RealEstate']), style="dashed")
     
-    # Ekran genişliğine tam oturması için use_container_width=True eklendi
     st.graphviz_chart(dot, use_container_width=True)
+
+def draw_rrg_chart():
+    data = []
+    for sec in GLOBAL_MAP.keys():
+        rs, mom = np.random.uniform(93, 140), np.random.uniform(85, 115)
+        quad = "Leading" if rs>=100 and mom>=100 else "Weakening" if rs>=100 else "Lagging" if mom<100 else "Improving"
+        data.append({"Sektör": sec, "RS": rs, "Momentum": mom, "Durum": quad})
+        
+    df_rrg = pd.DataFrame(data)
+    fig = go.Figure()
+
+    fig.add_shape(type="rect", x0=93, y0=100, x1=100, y1=118, fillcolor="rgba(0,100,255,0.1)", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=100, y0=100, x1=145, y1=118, fillcolor="rgba(0,255,0,0.1)", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=93, y0=84, x1=100, y1=100, fillcolor="rgba(255,0,0,0.1)", line_width=0, layer="below")
+    fig.add_shape(type="rect", x0=100, y0=84, x1=145, y1=100, fillcolor="rgba(255,165,0,0.1)", line_width=0, layer="below")
+
+    fig.add_hline(y=100, line_dash="dash", line_color="#888")
+    fig.add_vline(x=100, line_dash="dash", line_color="#888")
+
+    for quad, color in zip(["Leading", "Weakening", "Lagging", "Improving"], ["#00ff88", "#fbc02d", "#ff3333", "#03a9f4"]):
+        df_sub = df_rrg[df_rrg["Durum"] == quad]
+        fig.add_trace(go.Scatter(x=df_sub["RS"], y=df_sub["Momentum"], mode='markers+text', 
+            marker=dict(size=14, color=color, line=dict(width=2, color='white')),
+            text=df_sub["Sektör"].apply(lambda x: x.split(" ")[1]), textposition="top center", name=quad))
+
+    fig.update_layout(title="Sektörel Relative Rotation Graph (RRG)", xaxis_title="Relative Strength (RS) > 100", yaxis_title="RS Momentum > 100", xaxis=dict(range=[93, 145]), yaxis=dict(range=[84, 118]), height=500, paper_bgcolor="#050505", plot_bgcolor="#111", font=dict(color="#e0e0e0"))
+    return fig, df_rrg
 
 # ==========================================
 # 4. YFINANCE OMNI FUSION (VEKTÖREL MOTOR)
@@ -318,23 +347,27 @@ def calculate_signals(ticker_list):
     if results: return pd.DataFrame(results).sort_values(by="Fusion", ascending=False)
     return pd.DataFrame()
 
-# ==========================================
-# Pandas Styler Sinyal Renklendirme (Kontrast Düzeltmesi)
-# ==========================================
+# Pandas Styler Sinyal Renklendirme
 def style_signals(val):
     if isinstance(val, str):
-        if 'HYPER BUY' in val: return 'background-color: #ffeb3b; color: #000000; font-weight: bold;'
-        if 'HYPER SELL' in val: return 'background-color: #880e4f; color: #ffffff; font-weight: bold;'
-        if 'WHALE RE-ENTRY' in val: return 'background-color: #00bcd4; color: #000000; font-weight: bold;'
-        if 'WHALE IN' in val: return 'background-color: #01579b; color: #ffffff;'
-        if 'VOLA HOLE' in val: return 'background-color: #6a1b9a; color: #ffffff;'
-        if 'EXP BUY' in val: return 'background-color: #00e676; color: #000000; font-weight: bold;'
-        if 'EXP SELL' in val: return 'background-color: #ff3d00; color: #ffffff; font-weight: bold;'
-        if 'BUY' in val: return 'background-color: #1b5e20; color: #00ff88; font-weight: bold;'
-        if 'SELL' in val: return 'background-color: #440000; color: #ff3333; font-weight: bold;'
-        if val == '⛔': return 'background-color: #b71c1c; color: #ffffff; font-size: 1.2rem; text-align: center;'
-        if val == '✅': return 'background-color: #004d40; color: #ffffff; font-size: 1.2rem; text-align: center;'
-    return 'background-color: #222222; color: #ffffff;'
+        if 'HYPER BUY' in val: return 'background-color: #ffeb3b; color: #000000 !important; font-weight: bold;'
+        if 'HYPER SELL' in val: return 'background-color: #880e4f; color: #ffffff !important; font-weight: bold;'
+        if 'WHALE RE-ENTRY' in val: return 'background-color: #00bcd4; color: #000000 !important; font-weight: bold;'
+        if 'WHALE IN' in val: return 'background-color: #01579b; color: #ffffff !important;'
+        if 'VOLA HOLE' in val: return 'background-color: #6a1b9a; color: #ffffff !important;'
+        if 'EXP BUY' in val: return 'background-color: #00e676; color: #000000 !important; font-weight: bold;'
+        if 'EXP SELL' in val: return 'background-color: #ff3d00; color: #ffffff !important; font-weight: bold;'
+        if 'BUY' in val: return 'background-color: #1b5e20; color: #00ff88 !important; font-weight: bold;'
+        if 'SELL' in val: return 'background-color: #440000; color: #ff3333 !important; font-weight: bold;'
+        if val == '⛔': return 'background-color: #b71c1c; color: #ffffff !important; font-size: 1.2rem; text-align: center;'
+        if val == '✅': return 'background-color: #004d40; color: #ffffff !important; font-size: 1.2rem; text-align: center;'
+    return 'background-color: #222222; color: #ffffff !important;'
+
+def style_percentages(val):
+    if isinstance(val, float):
+        color = '#00ff88' if val > 0 else '#ff3333'
+        return f'color: {color} !important; font-weight: bold;'
+    return ''
 
 # ==========================================
 # 5. ANA EKRAN KOKPİTİ
@@ -364,8 +397,11 @@ with col_map:
 
 st.divider()
 
-# --- DERİN SEKTÖR ANALİZİ ---
-st.subheader("🎯 Ayrıntılı Sektör ve Hisse Taraması")
+# --- RRG VE DERİN SEKTÖR ANALİZİ ---
+st.subheader("🎯 Sektörel Rotasyon Grafiği (RRG) & Derin Tarama")
+fig_rrg, df_rrg_data = draw_rrg_chart()
+st.plotly_chart(fig_rrg, use_container_width=True)
+
 st.session_state.active_sector = st.selectbox("Sektörel derinliğe inmek için bir alan seçin:", list(GLOBAL_MAP.keys()))
 
 if st.session_state.active_sector:
@@ -416,16 +452,10 @@ st.subheader("📋 Genel Portföy İzleme Listesi (Fair Value Analizi)")
 raw_tickers = ["NVDA", "AMD", "TSM", "ASML", "AVGO", "ARM", "AXTI", "SMCI", "AI", "GOOG", "META", "IONQ", "NBIS", "ADBE", "DT", "S", "EXTR", "OUST", "ONDS", "RKLB", "SIDU", "SPIR", "BKSY", "SATL", "SPCE", "RTX", "KTOS", "SMR", "NNE", "CEG", "TLN", "BKR", "ASTI", "IREN", "WULF", "SLNH", "HIMS", "TDOC", "OSCR", "AMGN", "PFE", "GMAB", "CLPT", "IINN", "QCLS", "PYPL", "MA", "PGY", "OPEN", "CRML", "ATLX", "BMNR", "STLA", "CARR", "CPRT", "GRAB", "SFM", "HITI", "TRUG", "SBET", "T", "P", "SILJ", "PPLT", "PALL", "COPX", "GDXJ", "UFO", "BULL", "CRM", "SNOW", "NOW", "LMT", "CIFR", "VST", "DGXX"]
 portfolio_tickers = sorted(list(set(raw_tickers)))
 
-def style_percentages(val):
-    if isinstance(val, float):
-        color = '#00ff88' if val > 0 else '#ff3333'
-        return f'color: {color}; font-weight: bold;'
-    return ''
-
 with st.spinner("Portföy simülasyonu ve veriler hesaplanıyor..."):
     df_port = calculate_signals(portfolio_tickers)
     if not df_port.empty:
-        # Fair Value ve Değişimleri Simüle Ediyoruz (Eski format)
+        # Fair Value ve Değişimleri Simüle Ediyoruz
         df_port['Fair Value'] = df_port['Fiyat'].apply(lambda x: f"${float(x[1:]) * np.random.uniform(0.9, 1.2):.2f}")
         df_port['1 Gün (%)'] = [round(np.random.uniform(-5, 5), 2) for _ in range(len(df_port))]
         df_port['1 Hafta (%)'] = [round(np.random.uniform(-15, 20), 2) for _ in range(len(df_port))]
