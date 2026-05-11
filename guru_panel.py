@@ -175,28 +175,35 @@ def draw_battery_with_delta(label, current, previous, delta_icon):
 
 def draw_smart_money_flow(trigger_data):
     dot = graphviz.Digraph()
-    # Harita boyutu büyütüldü (12,7)
-    dot.attr(bgcolor='#050505', rankdir='LR', size='12,7', ratio='fill')
+    
+    # Sıkıştırmayı kaldırıp Yüksek Çözünürlük (DPI 300) tanımlıyoruz
+    dot.attr(bgcolor='#050505', rankdir='LR', dpi='300')
+    
+    # Kutu boyutlarını, kenar boşluklarını ve global font büyüklüğünü devasa yapıyoruz
+    dot.attr('node', fontsize='28', fontname='Arial', margin='0.3,0.1')
+    dot.attr('edge', fontsize='24')
     
     with dot.subgraph(name='cluster_0') as c:
-        c.attr(style='dashed', color='#555', label='Kaydi Varlıklar', fontcolor='#e0e0e0', fontsize='14')
-        c.node("FIAT", "Fiat Currency", shape='ellipse', style='filled', fillcolor='#4a148c', fontcolor='white', fontsize='12')
-        c.node("USD", "USD (Merkez)", shape='circle', style='filled', fillcolor='#0277bd', fontcolor='white', width='1.5', fontsize='12')
-        c.node("STOCK", "Borsalar", shape='box', style='filled', fillcolor='#f57f17', fontcolor='white', fontsize='12')
-        c.node("BOND", "Tahviller", shape='box', style='filled', fillcolor='#2e7d32', fontcolor='white', fontsize='12')
-        c.node("CRYPTO", "Kripto", shape='box', style='filled', fillcolor='#d81b60', fontcolor='white', fontsize='12')
+        c.attr(style='dashed', color='#555', label='Kaydi Varlıklar', fontcolor='#e0e0e0', fontsize='36')
+        c.node("FIAT", "Fiat\nCurrency", shape='ellipse', style='filled', fillcolor='#4a148c', fontcolor='white')
+        c.node("USD", "USD\n(Merkez)", shape='circle', style='filled', fillcolor='#0277bd', fontcolor='white', width='2.5', fixedsize='true')
+        c.node("STOCK", "Borsalar", shape='box', style='filled', fillcolor='#f57f17', fontcolor='white', height='1.5')
+        c.node("BOND", "Tahviller", shape='box', style='filled', fillcolor='#2e7d32', fontcolor='white', height='1.5')
+        c.node("CRYPTO", "Kripto", shape='box', style='filled', fillcolor='#d81b60', fontcolor='white', height='1.5')
         
     with dot.subgraph(name='cluster_1') as c:
-        c.attr(style='dashed', color='#555', label='Maddi Varlıklar', fontcolor='#e0e0e0', fontsize='14')
-        c.node("COMM", "Emtia & Enerji", shape='circle', style='filled', fillcolor='#00695c', fontcolor='white', fontsize='12')
-        c.node("GOLD", "Değer Saklama", shape='circle', style='filled', fillcolor='#fbc02d', fontcolor='black', fontsize='12')
-        c.node("REAL", "Gayrimenkul", shape='box', style='filled', fillcolor='#827717', fontcolor='white', height='2', fontsize='12')
+        c.attr(style='dashed', color='#555', label='Maddi Varlıklar', fontcolor='#e0e0e0', fontsize='36')
+        c.node("COMM", "Emtia &\nEnerji", shape='circle', style='filled', fillcolor='#00695c', fontcolor='white', width='2.4', fixedsize='true')
+        c.node("GOLD", "Değer\nSaklama", shape='circle', style='filled', fillcolor='#fbc02d', fontcolor='black', width='2.4', fixedsize='true')
+        c.node("REAL", "Gayrimenkul", shape='box', style='filled', fillcolor='#827717', fontcolor='white', height='1.5')
 
     bat = trigger_data['battery']
-    def get_pen(val): return str(max(1.5, val / 12))
+    
+    # Ok kalınlıklarını da devasa grafik yapısına uyumlu olacak şekilde artırdık
+    def get_pen(val): return str(max(3.0, val / 6))
     def get_col(val): return "#00ff88" if val >= 60 else "#ff3333" if val <= 40 else "#888"
 
-    dot.edge("FIAT", "USD", color="#aaa", penwidth="2")
+    dot.edge("FIAT", "USD", color="#aaa", penwidth="5")
     dot.edge("USD", "STOCK", color=get_col(bat['Stocks']), penwidth=get_pen(bat['Stocks']))
     dot.edge("USD", "BOND", color=get_col(bat['Bonds']), penwidth=get_pen(bat['Bonds']))
     dot.edge("USD", "CRYPTO", color=get_col(bat['Crypto']), penwidth=get_pen(bat['Crypto']))
@@ -206,7 +213,8 @@ def draw_smart_money_flow(trigger_data):
     dot.edge("USD", "GOLD", color=get_col(bat['Commodities']), penwidth=get_pen(bat['Commodities']))
     dot.edge("COMM", "REAL", color=get_col(bat['RealEstate']), penwidth=get_pen(bat['RealEstate']), style="dashed")
     
-    st.graphviz_chart(dot)
+    # Ekran genişliğine tam oturması için use_container_width=True eklendi
+    st.graphviz_chart(dot, use_container_width=True)
 
 # ==========================================
 # 4. YFINANCE OMNI FUSION (VEKTÖREL MOTOR)
