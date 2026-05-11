@@ -1,207 +1,228 @@
 import streamlit as st
-import yfinance as yf
 import pandas as pd
 import numpy as np
-import plotly.express as px
-from datetime import datetime, timedelta
+import yfinance as yf
+import plotly.graph_objects as go
+import graphviz
+from datetime import datetime
 
-# ==========================================
-# 1. AYARLAR VE VERİ HARİTASI
-# ==========================================
-st.set_page_config(page_title="Aether V695 - Quantum Radar", layout="wide")
+# --- 0. AYARLAR & STATE YÖNETİMİ ---
+st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION", page_icon="🏛️")
 
-GLOBAL_MAP = {
-    "Uzay & Savunma (Avionics)": ["RKLB", "SIDU", "UFO", "SPCE", "BKSY", "SATL", "SPIR", "ONDS", "KTOS", "RTX"],
-    "Nükleer & Yeni Nesil Enerji": ["SMR", "NNE", "CEG", "TLN", "ASTI", "QCLS"],
-    "AI, Çip & Kuantum (Quantum)": ["NVDA", "TSM", "AVGO", "AMD", "ARM", "ASML", "SMCI", "AI", "IONQ", "NBIS", "AXTI"],
-    "Bitcoin Mining & Veri Merkezleri": ["WULF", "IREN", "SLNH"],
-    "Stratejik Madenler & Emtia": ["GDXJ", "SILJ", "COPX", "PPLT", "PALL", "ATLX", "CRML"],
-    "Sağlık Tekno & Biyoteknoloji": ["HIMS", "TDOC", "OSCR", "AMGN", "PFE", "GMAB", "CLPT", "BMNR", "IINN", "TRUG"],
-    "Yazılım, SaaS & Big Tech": ["GOOG", "META", "ADBE", "DT", "S", "EXTR", "OPEN", "OUST"],
-    "Fintek & Global Servisler": ["PYPL", "MA", "PGY", "GRAB", "CPRT", "SFM", "SBET", "STLA", "CARR", "T", "BKR"]
+# CSS: Aether Estetiği ve Tıklanabilir Alanlar
+st.markdown("""
+    <style>
+    .stApp { background-color: #050505; color: #e0e0e0; }
+    .news-summary-pos { color: #00ff88; font-weight: bold; cursor: pointer; }
+    .news-summary-neg { color: #ff3333; font-weight: bold; cursor: pointer; }
+    .fv-up { color: #00ff88; font-weight: bold; font-size: 1.2rem; }
+    .fv-down { color: #ff3333; font-weight: bold; font-size: 1.2rem; }
+    .leader-stock { border: 1px solid #00ff88; border-radius: 5px; padding: 10px; margin: 5px; }
+    .laggard-stock { border: 1px solid #ff3333; border-radius: 5px; padding: 10px; margin: 5px; }
+    </style>
+""", unsafe_allow_html=True)
+
+# Oturum Değişkenleri (Hiyerarşik Gezinti İçin)
+if 'macro_state' not in st.session_state: st.session_state.macro_state = "neutral"
+if 'macro_impact' not in st.session_state: st.session_state.macro_impact = "neutral"
+if 'show_macro_news' not in st.session_state: st.session_state.show_macro_news = False
+if 'active_asset' not in st.session_state: st.session_state.active_asset = None
+if 'active_sector' not in st.session_state: st.session_state.active_sector = None
+
+# --- VERİ MOTORU ---
+# 0. Sektörel Gruplandırma
+SECTORS = {
+    "Teknoloji (AI & Çip)": {"Leaders": ["NVDA", "AVGO", "MSFT"], "Laggards": ["INTC", "CSCO"]},
+    "Enerji & Altyapı": {"Leaders": ["SMR", "CEG", "VST"], "Laggards": ["XOM", "CVX"]},
+    "Finans": {"Leaders": ["JPM", "GS"], "Laggards": ["BAC", "C"]},
+    "Tüketim": {"Leaders": ["AMZN", "COST"], "Laggards": ["NKE", "SBUX"]}
 }
 
-ETF_INFO = {
-    # --- UZAY & SAVUNMA ---
-    "RKLB": {"area": "Küçük Uydu Fırlatma & Uzay Sistemleri", "stocks": ["SpaceX (Private)", "ASTR", "PL", "LMT"]},
-    "SIDU": {"area": "Uzay Altyapısı & Uydu Üretimi", "stocks": ["RKLB", "BKSY", "LLAP"]},
-    "UFO": {"area": "Global Uzay Ekonomisi ETF", "stocks": ["IRDM", "ORB", "LMT", "BA"]},
-    "SPCE": {"area": "Uzay Turizmi & Suborbital Uçuşlar", "stocks": ["Blue Origin (Private)", "RACE"]},
-    "KTOS": {"area": "İnsansız Hava Araçları & Savunma Elektroniği", "stocks": ["RTX", "LMT", "NOC"]},
-    "RTX": {"area": "Havacılık Motorları & Füze Sistemleri", "stocks": ["BA", "GE", "LMT", "HON"]},
+ASSET_GROUPS = ["Hisse Senedi", "Tahvil", "Emtia", "Kripto", "Forex", "Gayrimenkul"]
 
-    # --- NÜKLEER & ENERJİ ---
-    "SMR": {"area": "Küçük Modüler Nükleer Reaktörler (SMR)", "stocks": ["OKLO", "NNE", "BWXT"]},
-    "NNE": {"area": "Taşınabilir Mikro Nükleer Reaktörler", "stocks": ["SMR", "CCJ", "UUUU"]},
-    "CEG": {"area": "Nükleer Enerji Üretimi & Karbonsuz Elektrik", "stocks": ["VST", "TLN", "DUK"]},
-    "TLN": {"area": "Veri Merkezleri İçin Nükleer Enerji Tedariği", "stocks": ["CEG", "AMZN", "EQIX"]},
-
-    # --- AI & QUANTUM ---
-    "NVDA": {"area": "Yapay Zeka Hızlandırıcıları & GPU Lideri", "stocks": ["AMD", "AVGO", "INTC", "ARM"]},
-    "IONQ": {"area": "Kuantum Bilgisayar Donanımı & Yazılımı", "stocks": ["RGTI", "QUBT", "GOOG"]},
-    "SMCI": {"area": "Yüksek Performanslı AI Sunucu Çözümleri", "stocks": ["DELL", "HPE", "NVDA"]},
-    "ARM": {"area": "Enerji Verimli İşlemci Mimarisi (IP)", "stocks": ["NVDA", "AAPL", "QCOM"]},
-    "TSM": {"area": "Dünyanın En Büyük Çip Dökümhanesi", "stocks": ["INTC", "SAMSUNG", "ASML"]},
-    "AI": {"area": "Kurumsal Yapay Zeka Yazılımları", "stocks": ["PLTR", "MSFT", "CRM"]},
-
-    # --- BITCOIN MINING ---
-    "WULF": {"area": "Sıfır Karbon Bitcoin Madenciliği", "stocks": ["MARA", "RIOT", "IREN"]},
-    "IREN": {"area": "Veri Merkezi Altyapısı & BTC Mining", "stocks": ["WULF", "CLEANSPARK", "HIVE"]},
-    "SLNH": {"area": "Yeşil Enerji Odaklı Hesaplama & Madencilik", "stocks": ["WULF", "IREN"]},
-
-    # --- MADENLER & EMTİA ---
-    "GDXJ": {"area": "Küçük Ölçekli Altın Madencileri (Junior)", "stocks": ["GDX", "NEM", "GOLD"]},
-    "SILJ": {"area": "Gümüş Maden Şirketleri ETF", "stocks": ["PAAS", "AG", "HL"]},
-    "COPX": {"area": "Global Bakır Madenciliği ETF", "stocks": ["FCX", "ANTO", "BHP"]},
-    "ATLX": {"area": "Lityum Arama & Geliştirme (Brezilya)", "stocks": ["LIT", "ALB", "SQM"]},
-
-    # --- SAĞLIK & BİYOTEK ---
-    "HIMS": {"area": "Tele-Sağlık & Kişiselleştirilmiş İlaç", "stocks": ["TDOC", "AMZN", "LLY"]},
-    "TDOC": {"area": "Sanal Sağlık Hizmetleri & Uzaktan İzleme", "stocks": ["HIMS", "AMZN", "OSCR"]},
-    "AMGN": {"area": "Biyoteknolojik İlaç Devleri", "stocks": ["PFE", "MRNA", "GILD"]},
-    "OSCR": {"area": "Teknoloji Odaklı Sağlık Sigortası", "stocks": ["UNH", "CVS", "ALHC"]},
-
-    # --- BIG TECH & SAAS ---
-    "GOOG": {"area": "Arama Motoru, Bulut & AI (Gemini)", "stocks": ["META", "MSFT", "AMZN"]},
-    "META": {"area": "Sosyal Medya Devrimi & Metaverse", "stocks": ["GOOG", "SNAP", "TTD"]},
-    "ADBE": {"area": "Yaratıcı Yazılımlar & Dijital Deneyim", "stocks": ["MSFT", "CANVA", "CRM"]},
-    "S": {"area": "Yapay Zeka Destekli Siber Güvenlik", "stocks": ["CRWD", "PANW", "FTNT"]},
-    "DT": {"area": "Bulut Gözlemlenebilirlik & Otomasyon", "stocks": ["DDOG", "NEWR", "SPLK"]}
-}
-
-SUB_TICKERS = [item for sublist in GLOBAL_MAP.values() for item in sublist]
-
-# ==========================================
-# 2. QUANTUM ENGINE (MATEMATİKSEL MOTOR)
-# ==========================================
-def scan_market(tickers, benchmark="SPY"):
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=60)
+# --- QUANTUM FUSION CORE (V127 ARCHITECT) ---
+def apply_quantum_fusion(df):
+    # 1. Whale Power Motoru
+    df['vol_avg'] = df['volume'].rolling(window=20).mean()
+    df['std_vol'] = df['volume'].rolling(window=20).std()
+    df['is_whale_vol'] = df['volume'] > (df['vol_avg'] + (df['std_vol'] * 1.5))
+    df['whale_pwr'] = (df['volume'] / df['vol_avg']) * ((df['close'] - df['low']) / (df['high'] - df['low'] + 1e-6))
     
-    raw_data = yf.download(tickers + [benchmark], start=start_date, end=end_date, progress=False, group_by='ticker')
+    # 2. Skorlama (3-Mum kuralı hariç)
+    df['fusion_score'] = 0
+    df['ema_1'] = df['close'].ewm(span=1, adjust=False).mean()
+    df.loc[df['close'] > df['ema_1'], 'fusion_score'] += 1
+    df.loc[df['whale_pwr'] > 0.5, 'fusion_score'] += 2
+    df.loc[df['is_whale_vol'], 'fusion_score'] += 1
     
-    results = []
-    benchmark_close = raw_data[benchmark]['Close']
+    # 3. Tuzak Kontrolü (✅/⛔) - Eğim yerine fiyat artışına bakılır
+    df['is_bull_trap'] = (df['close'] > df['close'].shift(1)) & (df['whale_pwr'] < df['whale_pwr'].shift(1))
+    return df
+
+def get_trap_signal(is_trap):
+    return "⛔" if is_trap else "✅"
+
+# --- GÖRSEL BİLEŞENLER ---
+# 5. Hız Göstergesi (Gauge)
+def draw_gauge(value, title, color):
+    fig = go.Figure(go.Indicator(
+        mode = "gauge+number", value = value, title = {'text': title, 'font': {'size': 16, 'color': 'white'}},
+        gauge = {'axis': {'range': [0, 100], 'tickwidth': 1}, 'bar': {'color': color}, 'bgcolor': "black",
+                 'steps': [{'range': [0, 50], 'color': '#222'}, {'range': [50, 100], 'color': '#444'}]}
+    ))
+    fig.update_layout(height=200, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
+    return fig
+
+# 7 & 8. Nöro Link Bağlantıları
+def draw_neuro_links():
+    dot = graphviz.Digraph()
+    dot.attr(bgcolor='transparent', rankdir='TB', size='8,8')
     
-    for t in tickers:
-        if t not in raw_data.columns.levels[0]: continue
-        df = raw_data[t].copy().dropna()
-        if len(df) < 25: continue
+    # Makro etkiye göre renk belirleme
+    if st.session_state.macro_impact == "positive": link_color = "#00ff88"
+    elif st.session_state.macro_impact == "negative": link_color = "#ff3333"
+    else: link_color = "#666666"
+
+    # Varlık gruplarını 3'erli alt alta diz
+    for i in range(0, len(ASSET_GROUPS), 3):
+        with dot.subgraph() as s:
+            s.attr(rank='same')
+            for asset in ASSET_GROUPS[i:i+3]:
+                # Eğer Hisse Senedi seçiliyse onu vurgula
+                fill = '#333' if asset == st.session_state.active_asset else '#111'
+                border = link_color if st.session_state.macro_impact != "neutral" else '#444'
+                dot.node(asset, asset, shape='box', style='filled,rounded', fillcolor=fill, fontcolor='white', color=border, penwidth='2')
+    
+    # Nöro Bağlantıları çiz (İlk varlıktan diğerlerine ve aralarında)
+    for i in range(len(ASSET_GROUPS)-1):
+        dot.edge(ASSET_GROUPS[i], ASSET_GROUPS[i+1], color=link_color, style='dashed', penwidth='2')
+    
+    st.graphviz_chart(dot)
+
+# --- ANA UYGULAMA ---
+st.title("🏛️ AETHER MACRO SYSTEM")
+
+# 5, 6, 8. Makro Başlıklar, Puanlar ve Etkileşimler
+col1, col2, col3 = st.columns(3)
+macros = [("LEADING", 75, "#00ff88", "positive"), ("COINCIDENT", 45, "#ff3333", "negative"), ("LAGGING", 55, "#f1c40f", "neutral")]
+
+for i, (name, val, color, impact) in enumerate(macros):
+    with [col1, col2, col3][i]:
+        st.plotly_chart(draw_gauge(val, name, color), use_container_width=True)
         
-        # --- WHALE POWER (V695) ---
-        vol_avg = df['Volume'].rolling(window=20).mean()
-        vol_std = df['Volume'].rolling(window=20).std()
-        is_whale_vol = df['Volume'].iloc[-1] > (vol_avg.iloc[-1] + (vol_std.iloc[-1] * 1.5))
-        
-        spread = (df['High'] - df['Low']).replace(0, 0.001)
-        w_pwr = (df['Volume'] / vol_avg) * ((df['Close'] - df['Low']) / spread)
-        current_w_pwr = round(w_pwr.iloc[-1] * 100, 1)
+        # Streamlit'te Uzun/Kısa Basma Simülasyonu
+        btn_c1, btn_c2 = st.columns(2)
+        if btn_c1.button(f"🔗 Etki (Kısa)", key=f"short_{name}"):
+            st.session_state.macro_state = name
+            st.session_state.macro_impact = impact
+            st.session_state.show_macro_news = False
+            st.session_state.active_asset = None
+            st.session_state.active_sector = None
+            st.rerun()
+            
+        if btn_c2.button(f"📰 Haber (Uzun)", key=f"long_{name}"):
+            st.session_state.macro_state = name
+            st.session_state.macro_impact = impact
+            st.session_state.show_macro_news = True
+            st.rerun()
 
-        # --- OMNI FUSION (V650) ---
-        fusion_score = 0
-        ema12 = df['Close'].ewm(span=12, adjust=False).mean().iloc[-1]
-        if df['Close'].iloc[-1] > ema12: fusion_score += 1
-        
-        slope_up = (df['Close'].iloc[-1] > df['Close'].iloc[-2]) and (df['Close'].iloc[-2] > df['Close'].iloc[-3])
-        if slope_up: fusion_score += 1
-        if current_w_pwr > 50: fusion_score += 2
-        if is_whale_vol: fusion_score += 1
-
-        # --- TRAP & SIGNAL ---
-        is_bull_trap = slope_up and (w_pwr.iloc[-1] < w_pwr.iloc[-2])
-        rs = (df['Close'] / benchmark_close) * 100
-        mom = ((rs.iloc[-1] / rs.iloc[-11]) - 1) * 100
-        jump_score = ((rs.iloc[-1] / rs.iloc[-4]) - 1) * 100
-        
-        if is_bull_trap: signal = "⛔ TRAP"
-        elif fusion_score >= 4: signal = "💎 ANY BUY"
-        elif is_whale_vol and current_w_pwr > 70: signal = "🐋 WHALE"
-        elif fusion_score >= 2: signal = "✅ BUY"
-        else: signal = "⏳"
-
-        results.append({
-            "Ticker": t,
-            "Sinyal": signal,
-            "Fusion Skor": fusion_score,
-            "Whale Power": current_w_pwr,
-            "3G Sıçrama %": round(jump_score, 2),
-            "RS Gücü": round(rs.iloc[-1], 2),
-            "Momentum": round(mom, 2)
-        })
-        
-    return pd.DataFrame(results).sort_values(by="Fusion Skor", ascending=False)
-
-# ==========================================
-# 3. KOKPİT EKRANI (MOBİL ODAKLI)
-# ==========================================
-st.title("📟 Quantum Radar V695")
-st.write(f"**Engine:** Whale + Fusion | {datetime.now().strftime('%H:%M')}")
-
-# Telefon hafızası: Tarama verilerini session_state içinde tut
-if st.button("HEDEF KİLİTLE (Deep Scan)"):
-    with st.spinner("Balinalar İzleniyor..."):
-        st.session_state.scan_results = scan_market(SUB_TICKERS)
-
-if "scan_results" in st.session_state:
-    res = st.session_state.scan_results
-
-    # Üst Panel: Kritik Sinyaller (Metrics)
-    hits = res[res['Sinyal'].isin(["💎 ANY BUY", "🐋 WHALE"])].head(3)
-    if not hits.empty:
-        m_cols = st.columns(len(hits))
-        for idx, (_, row) in enumerate(hits.iterrows()):
-            with m_cols[idx]:
-                st.metric(label=row['Ticker'], value=row['Sinyal'], delta=f"{row['Whale Power']}%")
-
+# 6. Uzun Basılınca Haberlerin Sondan Başa Çıkması
+if st.session_state.show_macro_news:
     st.divider()
+    st.subheader(f"📡 {st.session_state.macro_state} - Son 10 Makro Haber")
+    for j in range(10, 0, -1): # Sondan başa sıralama
+        is_pos = (j % 2 == 0) if st.session_state.macro_impact == "neutral" else (st.session_state.macro_impact == "positive")
+        cls, icon = ("news-summary-pos", "🟢") if is_pos else ("news-summary-neg", "🔴")
+        st.markdown(f"<span class='{cls}'>{icon} Haber {j}: Global likidite endekslerinde { 'artış' if is_pos else 'daralma'} tespit edildi.</span>", unsafe_allow_html=True)
 
-    # Ana Tablo (Tıklama Özellikli)
-    st.subheader("📊 Omni-Fusion Tarayıcı")
-    st.caption("💡 Detay ve hisseler için satıra tıkla.")
+# 7 & 8. Varlık Tipleri ve Nöro Linkler
+st.divider()
+st.subheader("🔗 Varlık Sınıfları Nöro-Ağı")
+draw_neuro_links()
 
-    def color_signal(val):
-        if val == "💎 ANY BUY": return 'background-color: #004d40; color: white'
-        if val == "⛔ TRAP": return 'background-color: #4a148c; color: white'
-        if val == "🐋 WHALE": return 'background-color: #01579b; color: white'
-        return ''
+# 8 (Devamı). Varlık Grubuna Tıklama Simülasyonu
+st.write("Ağı yönlendirmek için etkilenecek varlık sınıfını seçin:")
+asset_cols = st.columns(len(ASSET_GROUPS))
+for i, asset in enumerate(ASSET_GROUPS):
+    with asset_cols[i]:
+        if st.button(asset, use_container_width=True):
+            st.session_state.active_asset = asset
+            st.session_state.active_sector = None
+            st.rerun()
 
-# Ana Tablo (Seçim mekanizması düzeltildi)
-    selection_event = st.dataframe(
-        res.style.map(color_signal, subset=['Sinyal']),
-        use_container_width=True,
-        on_select="rerun",
-        selection_mode="single-row", # BURASI DÜZELTİLDİ: "single-row"
-        key="main_table"
-    )
+# 9. Hisse Senetleri Seçildiğinde Sektörel Gruplar Çıkar
+if st.session_state.active_asset == "Hisse Senedi":
+    st.divider()
+    st.subheader("📊 Sektörel Etkileşim")
+    sec_cols = st.columns(len(SECTORS))
+    
+    for i, sector_name in enumerate(SECTORS.keys()):
+        with sec_cols[i]:
+            # Makro etkiye göre buton rengini simüle et
+            btn_type = "primary" if st.session_state.macro_impact == "positive" else "secondary"
+            if st.button(sector_name, type=btn_type, use_container_width=True):
+                st.session_state.active_sector = sector_name
+                st.rerun()
 
-# --- DETAY PANELİ (GÜNCELLENMİŞ VERSİYON) ---
-    if selection_event.selection.rows:
-        selected_idx = selection_event.selection.rows[0]
-        ticker = res.iloc[selected_idx]['Ticker']
-        
-        # HATA BURADAYDI: ETF_HOLDINGS yerine ETF_INFO kullanıyoruz
-        # Eğer ETF_INFO sözlüğünde bu ticker yoksa varsayılan değerleri getirir
-        info = ETF_INFO.get(ticker, {"area": "Sektörel Veri", "stocks": ["Veri Mevcut Değil"]})
-        
-        st.success(f"🔍 **{ticker} Analiz Paneli**")
-        
-        # Yeni eklenen Odak Alanı bilgisi
-        st.info(f"🌐 **Odak Alanı:** {info['area']}")
-        
-        c1, c2 = st.columns(2)
-        with c1:
-            st.write(f"**Fusion Skoru:** {res.iloc[selected_idx]['Fusion Skor']}/5")
-            st.write(f"**Whale Power:** %{res.iloc[selected_idx]['Whale Power']}")
-        with c2:
-            st.write("**Bileşen Balinalar (Top Holdings):**")
-            # info içindeki 'stocks' listesini döner
-            for h in info['stocks']:
-                st.write(f"• {h}")
-        st.divider()
+# 10, 1, 2, 3, 4. Sektör Seçilince Hisseler ve Detayları
+if st.session_state.active_sector:
+    st.divider()
+    st.subheader(f"🎯 {st.session_state.active_sector} Sektör Taraması")
+    
+    # 1. Öne Çıkanlar (Leaders) ve Geride Kalanlar (Laggards)
+    col_lead, col_lag = st.columns(2)
+    
+    with col_lead:
+        st.markdown("### 🟢 Öne Çıkanlar (Leaders)")
+        for ticker in SECTORS[st.session_state.active_sector]["Leaders"]:
+            with st.expander(f"💎 {ticker} Analizi"):
+                # 4. Fair Value Hesaplaması
+                fv = np.random.uniform(150, 900)
+                prev_fv = fv - np.random.uniform(5, 20)
+                fv_class = "fv-up" if fv > prev_fv else "fv-down"
+                arrow = "⬆️" if fv > prev_fv else "⬇️"
+                
+                st.markdown(f"**Güncel Fair Value:** <span class='{fv_class}'>${fv:.2f} {arrow}</span> (Önceki: ${prev_fv:.2f})", unsafe_allow_html=True)
+                
+                # 2 & 3. Haber Özetleri ve Detayları
+                st.write("**Son Çeyrek Önemli Haberler:**")
+                st.markdown("<div class='news-summary-pos'>🟢 Sektörel talep patlaması nedeniyle gelir tahminleri yukarı revize edildi.</div>", unsafe_allow_html=True)
+                with st.expander("Detayı Oku"):
+                    st.caption("Şirket, özellikle yeni nesil veri merkezlerinden gelen siparişlerin %40 oranında arttığını ve tedarik zincirinde sorun yaşanmadığını açıkladı.")
+                
+                st.markdown("<div class='news-summary-neg'>🔴 Çin pazarındaki regülasyon baskıları belirsizlik yaratıyor.</div>", unsafe_allow_html=True)
+                with st.expander("Detayı Oku"):
+                    st.caption("Yeni ihracat kısıtlamaları nedeniyle Asya pazarındaki genişleme planları 2027'ye ertelendi.")
 
-    # Grafik
-    fig = px.scatter(res, x="RS Gücü", y="Whale Power", text="Ticker", 
-                     color="Sinyal", size="Fusion Skor", title="Piyasa Matrisi")
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Lütfen 'Deep Scan' butonuna basarak taramayı başlatın.")
+    with col_lag:
+        st.markdown("### 🔴 Geride Kalanlar (Laggards)")
+        for ticker in SECTORS[st.session_state.active_sector]["Laggards"]:
+            with st.expander(f"⚠️ {ticker} Analizi"):
+                fv = np.random.uniform(20, 100)
+                prev_fv = fv + np.random.uniform(2, 10) # Laggard için fv düşmüş olsun
+                fv_class = "fv-up" if fv > prev_fv else "fv-down"
+                arrow = "⬆️" if fv > prev_fv else "⬇️"
+                
+                st.markdown(f"**Güncel Fair Value:** <span class='{fv_class}'>${fv:.2f} {arrow}</span> (Önceki: ${prev_fv:.2f})", unsafe_allow_html=True)
+                
+                st.write("**Son Çeyrek Önemli Haberler:**")
+                st.markdown("<div class='news-summary-neg'>🔴 Kar marjlarında daralma devam ediyor.</div>", unsafe_allow_html=True)
+                with st.expander("Detayı Oku"):
+                    st.caption("Artan operasyonel maliyetler ve düşen ürün fiyatları karlılığı baskılamaya devam ediyor.")
+
+# --- PORTFÖY BÖLÜMÜ ---
+st.divider()
+st.subheader("📋 Kendi Portföyüm")
+# İstenilen formatta portföy detayları
+portfolio_data = {
+    "Hisse": ["AAPL", "NVDA", "SMR", "CRDO"],
+    "Güncel Fiyat": ["$185.20", "$890.10", "$15.40", "$22.10"],
+    "Fair Value": ["$195.00", "$950.00", "$18.00", "$28.00"],
+    "1 Gün": ["+1.2% 🟢", "+3.5% 🟢", "-0.5% 🔴", "+2.1% 🟢"],
+    "1 Hafta": ["+2.1% 🟢", "+12.0% 🟢", "+4.2% 🟢", "-1.5% 🔴"],
+    "1 Ay": ["-1.5% 🔴", "+25.4% 🟢", "+18.2% 🟢", "+15.0% 🟢"],
+    "1 Çeyrek": ["+8.4% 🟢", "+85.2% 🟢", "+45.1% 🟢", "+32.4% 🟢"],
+    "1 Yıl": ["+12.5% 🟢", "+210.4% 🟢", "+115.0% 🟢", "+88.5% 🟢"]
+}
+df_port = pd.DataFrame(portfolio_data)
+st.table(df_port)
