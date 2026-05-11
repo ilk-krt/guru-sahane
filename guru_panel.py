@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 # ==========================================
 # 0. AYARLAR & AGRESİF DARK MODE CSS
 # ==========================================
-st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V128.0", page_icon="🏛️")
+st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V127.11", page_icon="🏛️")
 
 st.markdown("""
     <style>
@@ -17,7 +17,7 @@ st.markdown("""
     .stApp { background-color: #050505 !important; color: #e0e0e0 !important; }
     p, h1, h2, h3, h4, h5, h6, span, label, div { color: #e0e0e0 !important; }
     
-    /* Selectbox (Açılır Menü) - Beyaz Üzeri Gri Sorununun Çözümü */
+    /* Selectbox (Açılır Menü) */
     div[data-baseweb="select"] > div { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #444 !important; }
     div[data-baseweb="popover"] > div { background-color: #1a1a1a !important; }
     ul[role="listbox"] { background-color: #1a1a1a !important; }
@@ -54,8 +54,21 @@ if 'active_sector' not in st.session_state:
     st.session_state.active_sector = None
 
 # ==========================================
-# 1. GENİŞLETİLMİŞ VERİ HARİTASI (Günlük Tarama İçin)
+# 1. GENİŞLETİLMİŞ VERİ HARİTASI
 # ==========================================
+MAIN_SECTORS = {
+    "XLK": "Ana Sektör: Teknoloji",
+    "XLI": "Ana Sektör: Sanayi",
+    "XLE": "Ana Sektör: Enerji",
+    "XLV": "Ana Sektör: Sağlık",
+    "XLF": "Ana Sektör: Finans",
+    "XLY": "Ana Sektör: Tüketim",
+    "XLB": "Ana Sektör: Materyal",
+    "XLC": "Ana Sektör: İletişim",
+    "XLRE": "Ana Sektör: Gayrimenkul",
+    "XLU": "Ana Sektör: Kamu"
+}
+
 GLOBAL_MAP = {
     "Teknoloji (XLK)": ["SMH", "SOXX", "CIBR", "IGV", "BOTZ", "ARKF"],
     "Sanayi (XLI)": ["ITA", "XAR", "IYT", "PAVE", "JETS"],
@@ -97,20 +110,7 @@ ETF_INFO = {
 }
 
 # ==========================================
-# 2. 4H RADAR UNIVERSE (S&P500 & NASDAQ Temsili Mega Liste)
-# ==========================================
-SP500_NASDAQ_UNIVERSE = {
-    "Teknoloji": ["AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CSCO", "ADBE", "CRM", "AMD", "INTC", "TXN", "QCOM", "AMAT", "MU", "PANW", "SNOW", "PLTR", "CRWD", "SMCI", "ARM"],
-    "İletişim & Sosyal": ["GOOGL", "META", "NFLX", "DIS", "CMCSA", "VZ", "T", "TMUS", "SNAP", "PINS", "RDDT"],
-    "Tüketim": ["AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "BKNG", "MAR", "LULU", "WMT", "COST", "TGT", "KO", "PEP", "PG", "PM"],
-    "Finans": ["JPM", "BAC", "WFC", "C", "GS", "MS", "AXP", "V", "MA", "PYPL", "SQ", "COIN", "HOOD"],
-    "Sağlık": ["LLY", "UNH", "JNJ", "ABBV", "MRK", "PFE", "AMGN", "ISRG", "MDT", "VRTX", "MRNA"],
-    "Sanayi & Savunma": ["GE", "CAT", "BA", "LMT", "RTX", "GD", "NOC", "UNP", "UPS", "UBER"],
-    "Enerji & Altyapı": ["XOM", "CVX", "COP", "SLB", "OXY", "CEG", "VST", "SMR", "CCJ", "NEE"]
-}
-
-# ==========================================
-# 3. MAKRO TETİKLEYİCİLER & SEKTÖR MOTORU
+# 2. MAKRO TETİKLEYİCİLER & SEKTÖR MOTORU
 # ==========================================
 SYSTEM_TRIGGERS = {
     "GEOPOLITIK": {
@@ -179,7 +179,7 @@ def get_sector_status(sector_name, trigger):
     return base_charge, prev, delta_icon, news
 
 # ==========================================
-# 4. GÖRSEL MOTORLAR (GRAPHVIZ & RRG)
+# 3. GÖRSEL MOTORLAR (GRAPHVIZ & RRG)
 # ==========================================
 def draw_battery_with_delta(label, current, previous, delta_icon):
     color = "#00ff88" if current >= 75 else "#f1c40f" if current >= 45 else "#ff3333"
@@ -195,7 +195,6 @@ def draw_battery_with_delta(label, current, previous, delta_icon):
 
 def draw_smart_money_flow(trigger_data):
     dot = graphviz.Digraph()
-    
     dot.attr(bgcolor='#050505', rankdir='LR', ranksep='1.5', nodesep='0.8')
     dot.attr('node', fontsize='16', fontname='Arial', margin='0.2,0.1')
     dot.attr('edge', fontsize='14')
@@ -258,16 +257,20 @@ def draw_rrg_chart():
     return fig, df_rrg
 
 # ==========================================
-# 5. YFINANCE OMNI FUSION (VEKTÖREL GÜNLÜK MOTOR)
+# 4. YFINANCE OMNI FUSION (ZAMAN DİLİMİ DESTEKLİ MOTOR)
 # ==========================================
 @st.cache_data(ttl=900)
-def calculate_signals(ticker_list):
+def calculate_signals(ticker_list, interval="1d"):
     if not ticker_list: return pd.DataFrame()
     end_date = datetime.now()
-    start_date = end_date - timedelta(days=90)
     
     try:
-        raw_data = yf.download(ticker_list, start=start_date, end=end_date, group_by='ticker', progress=False)
+        if interval == "1d":
+            start_date = end_date - timedelta(days=90)
+            raw_data = yf.download(ticker_list, start=start_date, end=end_date, interval="1d", group_by='ticker', progress=False)
+        elif interval == "4h":
+            start_date = end_date - timedelta(days=50) # 1h verisi için max derinlik
+            raw_data = yf.download(ticker_list, start=start_date, end=end_date, interval="1h", group_by='ticker', progress=False)
     except:
         return pd.DataFrame()
 
@@ -280,11 +283,23 @@ def calculate_signals(ticker_list):
             else:
                 df = raw_data.copy().dropna()
                 
+            if df.empty: continue
+            
+            # 1 Saatlik veriyi 4 Saatlik periyotlara birleştirme (Resample)
+            if interval == "4h":
+                df.index = pd.to_datetime(df.index)
+                df = df.resample('4h').agg({
+                    'Open': 'first', 
+                    'High': 'max', 
+                    'Low': 'min', 
+                    'Close': 'last', 
+                    'Volume': 'sum'
+                }).dropna()
+
             if len(df) < 30: continue
 
             close, high, low, open_p, vol = df['Close'], df['High'], df['Low'], df['Open'], df['Volume']
             
-            # Whale Power Calculation
             delta = close.diff()
             gain = delta.where(delta > 0, 0).rolling(20).mean()
             loss = (-delta.where(delta < 0, 0)).rolling(20).mean()
@@ -303,12 +318,10 @@ def calculate_signals(ticker_list):
             wp = np.minimum((np.log10(1 + np.clip(logic_pwr, 0, None)) * 65)**0.8 * 1.8, 100)
             df['wp'] = pd.Series(wp, index=df.index).fillna(0)
             
-            # Whale Re-Entry
             df['wp_ma'] = df['wp'].rolling(9).mean()
             curr_wp, curr_ma = df['wp'].iloc[-1], df['wp_ma'].iloc[-1]
             is_reentry = (curr_wp > curr_ma) and (df['wp'].iloc[-2] <= df['wp_ma'].iloc[-2]) and (curr_wp > 40) and (vol.iloc[-1] > vol_sma.iloc[-1] * 1.2)
 
-            # Volatility Hole & Squeeze
             sma20 = close.rolling(20).mean()
             std20 = close.rolling(20).std()
             b_up, b_low = sma20 + 2*std20, sma20 - 2*std20
@@ -319,23 +332,19 @@ def calculate_signals(ticker_list):
             is_sqz = (b_low > k_low) & (b_up < k_up)
             vol_hole = is_sqz & (close <= (sma20 - ((k_up - sma20)/3.0)))
             
-            # Traps
             ema3 = close.ewm(span=3, adjust=False).mean()
             is_bear_trap = ((low < ema3) & (close > ema3) & (vol > vol_sma * 1.8)) | (vol_hole & (low < low.shift(1)) & (close > open_p))
             is_bull_trap = ((high > ema3) & (close < ema3) & (vol > vol_sma * 1.8)) | ((~vol_hole) & (close > k_up * 1.1) & (close < open_p))
 
-            # EXP Ignition
             macd = close.ewm(span=12).mean() - close.ewm(span=26).mean()
             exp_buy = (~is_sqz) & is_sqz.shift(1) & (macd > macd.rolling(9).mean()) & (macd > 0)
             exp_sel = (~is_sqz) & is_sqz.shift(1) & (macd < macd.rolling(9).mean()) & (macd < 0)
 
-            # Scoring
             fs = 0
             if close.iloc[-1] > ema3.iloc[-1]: fs += 1
             if curr_wp > 50: fs += 2
             if vol.iloc[-1] > vol_sma.iloc[-1] * 1.5: fs += 1
 
-            # Hiyerarşi
             if curr_wp >= 85 and fs >= 3: sig = "☄️ HYPER BUY"
             elif curr_wp <= 15 and fs <= 1: sig = "☄️ HYPER SELL"
             elif is_bull_trap.iloc[-1]: sig = "⛔"
@@ -359,111 +368,7 @@ def calculate_signals(ticker_list):
     if results: return pd.DataFrame(results).sort_values(by="Fusion", ascending=False)
     return pd.DataFrame()
 
-
-# ==========================================
-# 6. YFINANCE 4H MACRO RADAR SİSTEMİ (YENİ)
-# ==========================================
-@st.cache_data(ttl=3600) # Her saat başı 1 kez çeker
-def run_4h_market_scanner():
-    results = []
-    # Tüm evrendeki hisseleri tek bir listeye alıyoruz
-    all_tickers = []
-    ticker_to_sector = {}
-    for sector, t_list in SP500_NASDAQ_UNIVERSE.items():
-        for t in t_list:
-            all_tickers.append(t)
-            ticker_to_sector[t] = sector
-            
-    all_tickers = list(set(all_tickers))
-    
-    end_date = datetime.now()
-    start_date = end_date - timedelta(days=30)
-    
-    try:
-        # 1 saatlik interval ile veri çekip, pandasta 4 saate çevireceğiz
-        raw_data = yf.download(all_tickers, start=start_date, end=end_date, interval="1h", group_by='ticker', progress=False)
-    except:
-        return pd.DataFrame()
-
-    for t in all_tickers:
-        try:
-            if len(all_tickers) > 1:
-                if t not in raw_data.columns.levels[0]: continue
-                df = raw_data[t].copy().dropna()
-            else:
-                df = raw_data.copy().dropna()
-
-            if df.empty: continue
-
-            # 1 Saatlik veriyi 4 Saatlik periyotlara dönüştürüyoruz (Resample)
-            df_4h = df.resample('4h').agg({
-                'Open': 'first',
-                'High': 'max',
-                'Low': 'min',
-                'Close': 'last',
-                'Volume': 'sum'
-            }).dropna()
-            
-            if len(df_4h) < 30: continue
-
-            close, high, low, open_p, vol = df_4h['Close'], df_4h['High'], df_4h['Low'], df_4h['Open'], df_4h['Volume']
-            
-            # --- 4H Whale Power ---
-            delta = close.diff()
-            gain = delta.where(delta > 0, 0).rolling(20).mean()
-            loss = (-delta.where(delta < 0, 0)).rolling(20).mean()
-            rsi_20 = 100 - (100 / (1 + (gain / loss.replace(0, 0.001))))
-            
-            c_range = (high - low).clip(lower=0.001)
-            delta_q = ((close - low) - (high - close)) / c_range
-            vol_sma = vol.rolling(20).mean().clip(lower=0.001)
-            delta_vol_q = (delta_q * vol).rolling(20).mean() / vol_sma
-            rvol = (vol / vol_sma.clip(lower=1)).clip(upper=2.5)
-            
-            base_pwr = ((rsi_20 - 50) + (delta_vol_q * 50)) * rvol * 1.5
-            logic_pwr = np.log(1 + np.exp(base_pwr / 5)) * 5
-            logic_pwr = np.where((low > high.shift(2)) & (close > open_p), logic_pwr + 35, logic_pwr)
-            
-            wp = np.minimum((np.log10(1 + np.clip(logic_pwr, 0, None)) * 65)**0.8 * 1.8, 100)
-            df_4h['wp'] = pd.Series(wp, index=df_4h.index).fillna(0)
-            
-            # --- 4H Whale Re-Entry ---
-            df_4h['wp_ma'] = df_4h['wp'].rolling(9).mean()
-            curr_wp, curr_ma = df_4h['wp'].iloc[-1], df_4h['wp_ma'].iloc[-1]
-            is_reentry = (curr_wp > curr_ma) and (df_4h['wp'].iloc[-2] <= df_4h['wp_ma'].iloc[-2]) and (curr_wp > 40) and (vol.iloc[-1] > vol_sma.iloc[-1] * 1.2)
-
-            # --- 4H Volatility Hole ---
-            sma20 = close.rolling(20).mean()
-            std20 = close.rolling(20).std()
-            b_up, b_low = sma20 + 2*std20, sma20 - 2*std20
-            
-            tr = pd.concat([high - low, abs(high - close.shift(1)), abs(low - close.shift(1))], axis=1).max(axis=1)
-            k_up, k_low = sma20 + 1.5*tr.rolling(14).mean(), sma20 - 1.5*tr.rolling(14).mean()
-            
-            is_sqz = (b_low > k_low) & (b_up < k_up)
-            vol_hole = is_sqz & (close <= (sma20 - ((k_up - sma20)/3.0)))
-
-            # Sadece bu iki durumu gerçekleştirenleri listeye ekle
-            if is_reentry or vol_hole.iloc[-1]:
-                sig = "🔄 WHALE RE-ENTRY" if is_reentry else "🕳️ VOLA HOLE"
-                
-                results.append({
-                    "Ticker": t,
-                    "Sektör": ticker_to_sector[t],
-                    "Sinyal (4H)": sig,
-                    "Fiyat": f"${close.iloc[-1]:.2f}",
-                    "Whale Power": float(f"{curr_wp:.1f}")
-                })
-        except Exception:
-            continue
-            
-    if results: return pd.DataFrame(results).sort_values(by="Whale Power", ascending=False)
-    return pd.DataFrame()
-
-
-# ==========================================
 # GÜNCELLENMİŞ STYLER: ZORUNLU KOYU ARKA PLANLAR
-# ==========================================
 def style_signals(val):
     if isinstance(val, str):
         if 'HYPER BUY' in val: return 'background-color: #827717; color: white; font-weight: bold;'
@@ -486,7 +391,7 @@ def style_percentages(val):
     return ''
 
 # ==========================================
-# 7. ANA EKRAN KOKPİTİ
+# 5. ANA EKRAN KOKPİTİ
 # ==========================================
 st.title("🏛️ AETHER MACRO SYSTEM")
 
@@ -524,7 +429,6 @@ if st.session_state.active_sector:
     sec = st.session_state.active_sector
     st.markdown(f"### 🔍 {sec} Ekosistemi")
     
-    # Haberler ve Pil
     cur_chg, prev_chg, delta_icon, sec_news = get_sector_status(sec, st.session_state.active_trigger)
     c_info, c_batt = st.columns([1.5, 1])
     with c_info:
@@ -538,7 +442,6 @@ if st.session_state.active_sector:
     with c_batt:
         draw_battery_with_delta(sec, cur_chg, prev_chg, delta_icon)
 
-    # Toplu İndirme
     etfs_in_sector = GLOBAL_MAP[sec]
     all_stocks = []
     for etf in etfs_in_sector:
@@ -548,7 +451,7 @@ if st.session_state.active_sector:
     with st.spinner(f"{sec} içindeki tüm hisseler analiz ediliyor..."):
         df_sector_all = calculate_signals(all_stocks)
         
-        st.markdown("#### 📂 Alt Sektör Kırılımları ve Hisse Sinyalleri")
+        st.markdown("#### 📂 Alt Sektör Kırılımları ve Hisse Sinyalleri (Günlük)")
         for etf in etfs_in_sector:
             etf_data = ETF_INFO.get(etf, {"area": "Genel Kapsam", "stocks": []})
             with st.expander(f"📁 {etf} - {etf_data['area']}"):
@@ -561,7 +464,98 @@ if st.session_state.active_sector:
                 else:
                     st.write("Veri alınamadı.")
 
-# --- MÜKEMMEL PORTFÖY MODÜLÜ ---
+# ==========================================
+# 🚨 YENİ EKLENEN: 4H SEKTÖR & ALT SEKTÖR RADARI (SADECE ETF'LER)
+# ==========================================
+st.divider()
+st.subheader("🌐 4H SEKTÖR & ALT SEKTÖR RADARI (WHALE & HOLE)")
+st.markdown("Bu modül doğrudan **Ana Sektörleri** (XLK, XLE vb.) ve **Alt Sektörleri** (SMH, CIBR vb.) **4 Saatlik (4H)** zaman diliminde tarar. Hisselerden önce büyük fonların sektörel girişlerini tespit eder.")
+
+# Tüm ETF'leri (Ana ve Alt Sektörler) birleştiriyoruz
+all_etfs_to_scan = list(MAIN_SECTORS.keys()) + list(ETF_INFO.keys())
+
+# İsim haritalaması yapalım (Tabloda güzel görünsün diye)
+etf_name_map = {}
+for k, v in MAIN_SECTORS.items(): etf_name_map[k] = v
+for k, v in ETF_INFO.items(): etf_name_map[k] = f"Alt Sektör: {v['area']}"
+
+with st.spinner("Tüm Sektör ETF'leri 4 Saatlik (4H) periyotta Kuantum Motoru ile taranıyor..."):
+    df_4h_etfs = calculate_signals(all_etfs_to_scan, interval="4h")
+    
+    if not df_4h_etfs.empty:
+        df_4h_etfs['Sektör Adı'] = df_4h_etfs['Ticker'].map(etf_name_map)
+        
+        cols_4h = ['Sektör Adı', 'Ticker', 'Sinyal', 'Fiyat', 'Whale Power', 'Fusion']
+        df_4h_etfs = df_4h_etfs[cols_4h]
+        
+        df_whale_4h = df_4h_etfs[df_4h_etfs['Sinyal'] == '🔄 WHALE RE-ENTRY']
+        df_hole_4h = df_4h_etfs[df_4h_etfs['Sinyal'] == '🕳️ VOLA HOLE']
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("<h4 style='color: #00bcd4;'>🔄 4H Whale Re-Entry (Sektörler)</h4>", unsafe_allow_html=True)
+            if not df_whale_4h.empty:
+                st.dataframe(df_whale_4h.style.map(style_signals, subset=['Sinyal']), use_container_width=True, hide_index=True)
+            else:
+                st.info("4H periyotta hiçbir sektörde Whale Re-Entry tespit edilmedi.")
+                
+        with c2:
+            st.markdown("<h4 style='color: #9c27b0;'>🕳️ 4H Volatility Hole (Sektörler)</h4>", unsafe_allow_html=True)
+            if not df_hole_4h.empty:
+                st.dataframe(df_hole_4h.style.map(style_signals, subset=['Sinyal']), use_container_width=True, hide_index=True)
+            else:
+                st.info("4H periyotta hiçbir sektörde Volatility Hole tespit edilmedi.")
+    else:
+        st.error("4H Sektör verileri alınamadı.")
+
+# ==========================================
+# 🚨 OMNI RADAR (TÜM HİSSELERDE GÜNLÜK ÖZEL DURUM TARAMASI)
+# ==========================================
+st.divider()
+st.subheader("🚨 OMNI RADAR: Özel Durum Taraması (Günlük - Tüm Hisseler)")
+st.markdown("Tüm tanımlı alt sektörlerde (Hisse Bazlı) **Whale Re-Entry** ve **Volatility Hole** durumu gösterenleri tespit eder.")
+
+all_market_stocks = []
+ticker_to_area = {}
+
+for etf, data in ETF_INFO.items():
+    for ticker in data["stocks"]:
+        all_market_stocks.append(ticker)
+        ticker_to_area[ticker] = f"{etf} ({data['area']})"
+
+all_market_stocks = list(set(all_market_stocks))
+
+with st.spinner("Tüm piyasa (hisseler) günlük periyotta taranıyor, balina hareketleri ve vakumlar tespit ediliyor..."):
+    df_radar = calculate_signals(all_market_stocks, interval="1d")
+    
+    if not df_radar.empty:
+        df_radar['Alt Sektör'] = df_radar['Ticker'].map(ticker_to_area)
+        cols = ['Alt Sektör', 'Ticker', 'Sinyal', 'Fiyat', 'Whale Power', 'Fusion']
+        df_radar = df_radar[cols]
+        
+        df_whale = df_radar[df_radar['Sinyal'] == '🔄 WHALE RE-ENTRY']
+        df_hole = df_radar[df_radar['Sinyal'] == '🕳️ VOLA HOLE']
+        
+        col_radar1, col_radar2 = st.columns(2)
+        with col_radar1:
+            st.markdown("<h4 style='color: #00bcd4;'>🔄 Whale Re-Entry Olan Hisseler</h4>", unsafe_allow_html=True)
+            if not df_whale.empty:
+                st.dataframe(df_whale.style.map(style_signals, subset=['Sinyal']), use_container_width=True, hide_index=True)
+            else:
+                st.info("Şu an hiçbir hissede Whale Re-Entry tespit edilmedi.")
+                
+        with col_radar2:
+            st.markdown("<h4 style='color: #9c27b0;'>🕳️ Volatility Hole Olan Hisseler</h4>", unsafe_allow_html=True)
+            if not df_hole.empty:
+                st.dataframe(df_hole.style.map(style_signals, subset=['Sinyal']), use_container_width=True, hide_index=True)
+            else:
+                st.info("Şu an hiçbir hissede Volatility Hole tespit edilmedi.")
+    else:
+        st.error("Piyasa hisse verileri alınamadı.")
+
+# ==========================================
+# MÜKEMMEL PORTFÖY MODÜLÜ
+# ==========================================
 st.divider()
 st.subheader("📋 Genel Portföy İzleme Listesi (Fair Value Analizi)")
 
@@ -569,14 +563,12 @@ raw_tickers = ["NVDA", "AMD", "TSM", "ASML", "AVGO", "ARM", "AXTI", "SMCI", "AI"
 portfolio_tickers = sorted(list(set(raw_tickers)))
 
 with st.spinner("Portföy simülasyonu ve veriler hesaplanıyor..."):
-    df_port = calculate_signals(portfolio_tickers)
+    df_port = calculate_signals(portfolio_tickers, interval="1d")
     if not df_port.empty:
-        # Fair Value ve Değişimleri Simüle Ediyoruz
         df_port['Fair Value'] = df_port['Fiyat'].apply(lambda x: f"${float(x[1:]) * np.random.uniform(0.9, 1.2):.2f}")
         df_port['1 Gün (%)'] = [round(np.random.uniform(-5, 5), 2) for _ in range(len(df_port))]
         df_port['1 Hafta (%)'] = [round(np.random.uniform(-15, 20), 2) for _ in range(len(df_port))]
         
-        # Sütun sırasını düzenle
         df_port = df_port[['Ticker', 'Sinyal', 'Fiyat', 'Fair Value', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
         
         st.dataframe(
@@ -585,19 +577,3 @@ with st.spinner("Portföy simülasyonu ve veriler hesaplanıyor..."):
         )
     else:
         st.error("Yfinance sunucularından veri alınamadı.")
-
-# --- YENİ EKLENEN: 4H MACRO RADAR (S&P 500 & NASDAQ) ---
-st.divider()
-st.subheader("🦅 AETHER MARKET RADAR (S&P 500 & NASDAQ - 4H SCAN)")
-st.markdown("<p style='color:#ccc; font-size:0.9rem;'>Son 4 Saatlik periyotta <strong>Whale Re-Entry (Balina Girişi)</strong> veya <strong>Volatility Hole (Vakum)</strong> gerçekleştiren dev şirketler taranıyor...</p>", unsafe_allow_html=True)
-
-with st.spinner("Tüm Piyasalar (S&P500 & Nasdaq) Son 4 Saatlik Mumlar Taranıyor... (Bu işlem yfinance yoğunluğuna göre biraz sürebilir)"):
-    df_4h_radar = run_4h_market_scanner()
-    if not df_4h_radar.empty:
-        st.success(f"Tarama Tamamlandı! {len(df_4h_radar)} adet fırsat tespit edildi.")
-        st.dataframe(
-            df_4h_radar.style.map(style_signals, subset=['Sinyal (4H)']),
-            use_container_width=True, hide_index=True
-        )
-    else:
-        st.warning("Son 4 saatlik periyotta belirlenen şartları (Whale Re-Entry veya Volatility Hole) sağlayan büyük piyasa hissesi bulunamadı veya piyasa kapalı.")
