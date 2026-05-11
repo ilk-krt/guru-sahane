@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 # ==========================================
 # 0. AYARLAR & AGRESİF DARK MODE CSS
 # ==========================================
-st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V127.7", page_icon="🏛️")
+st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V127.9", page_icon="🏛️")
 
 st.markdown("""
     <style>
@@ -166,7 +166,7 @@ def get_sector_status(sector_name, trigger):
     return base_charge, prev, delta_icon, news
 
 # ==========================================
-# 3. GÖRSEL MOTORLAR (YENİLENMİŞ GRAPHVIZ)
+# 3. GÖRSEL MOTORLAR (GRAPHVIZ & RRG)
 # ==========================================
 def draw_battery_with_delta(label, current, previous, delta_icon):
     color = "#00ff88" if current >= 75 else "#f1c40f" if current >= 45 else "#ff3333"
@@ -183,7 +183,6 @@ def draw_battery_with_delta(label, current, previous, delta_icon):
 def draw_smart_money_flow(trigger_data):
     dot = graphviz.Digraph()
     
-    # Kutu sabitlemeyi ve DPI oynamalarını tamamen kaldırdık. Doğal genişleme ve mesafeler eklendi.
     dot.attr(bgcolor='#050505', rankdir='LR', ranksep='1.5', nodesep='0.8')
     dot.attr('node', fontsize='16', fontname='Arial', margin='0.2,0.1')
     dot.attr('edge', fontsize='14')
@@ -203,7 +202,7 @@ def draw_smart_money_flow(trigger_data):
         c.node("REAL", "Gayrimenkul", shape='box', style='filled', fillcolor='#827717', fontcolor='white')
 
     bat = trigger_data['battery']
-    def get_pen(val): return str(max(2.0, val / 10)) # Kalem kalınlığı optimize edildi
+    def get_pen(val): return str(max(2.0, val / 10))
     def get_col(val): return "#00ff88" if val >= 60 else "#ff3333" if val <= 40 else "#888"
 
     dot.edge("FIAT", "USD", color="#aaa", penwidth="3")
@@ -347,26 +346,30 @@ def calculate_signals(ticker_list):
     if results: return pd.DataFrame(results).sort_values(by="Fusion", ascending=False)
     return pd.DataFrame()
 
-# Pandas Styler Sinyal Renklendirme
+# ==========================================
+# GÜNCELLENMİŞ STYLER: ZORUNLU KOYU ARKA PLANLAR
+# (Beyaz yazıların kaybolmaması için Dark Mode optimizasyonu)
+# ==========================================
 def style_signals(val):
     if isinstance(val, str):
-        if 'HYPER BUY' in val: return 'background-color: #ffeb3b; color: #000000 !important; font-weight: bold;'
-        if 'HYPER SELL' in val: return 'background-color: #880e4f; color: #ffffff !important; font-weight: bold;'
-        if 'WHALE RE-ENTRY' in val: return 'background-color: #00bcd4; color: #000000 !important; font-weight: bold;'
-        if 'WHALE IN' in val: return 'background-color: #01579b; color: #ffffff !important;'
-        if 'VOLA HOLE' in val: return 'background-color: #6a1b9a; color: #ffffff !important;'
-        if 'EXP BUY' in val: return 'background-color: #00e676; color: #000000 !important; font-weight: bold;'
-        if 'EXP SELL' in val: return 'background-color: #ff3d00; color: #ffffff !important; font-weight: bold;'
-        if 'BUY' in val: return 'background-color: #1b5e20; color: #00ff88 !important; font-weight: bold;'
-        if 'SELL' in val: return 'background-color: #440000; color: #ff3333 !important; font-weight: bold;'
-        if val == '⛔': return 'background-color: #b71c1c; color: #ffffff !important; font-size: 1.2rem; text-align: center;'
-        if val == '✅': return 'background-color: #004d40; color: #ffffff !important; font-size: 1.2rem; text-align: center;'
-    return 'background-color: #222222; color: #ffffff !important;'
+        # Tüm renkler Dark Mode beyaz yazısına uygun hale getirildi (Koyu tonlar kullanıldı)
+        if 'HYPER BUY' in val: return 'background-color: #827717; color: white; font-weight: bold;' # Koyu Altın
+        if 'HYPER SELL' in val: return 'background-color: #4a0000; color: white; font-weight: bold;' # Bordo
+        if 'WHALE RE-ENTRY' in val: return 'background-color: #006064; color: white; font-weight: bold;' # Koyu Turkuaz
+        if 'WHALE IN' in val: return 'background-color: #01579b; color: white;' # Koyu Mavi
+        if 'VOLA HOLE' in val: return 'background-color: #4a148c; color: white;' # Koyu Mor
+        if 'EXP BUY' in val: return 'background-color: #1b5e20; color: white; font-weight: bold;' # Koyu Orman Yeşili
+        if 'EXP SELL' in val: return 'background-color: #bf360c; color: white; font-weight: bold;' # Koyu Kiremit
+        if 'BUY' in val: return 'background-color: #004d40; color: white; font-weight: bold;' # Koyu Zümrüt Yeşili
+        if 'SELL' in val: return 'background-color: #3e2723; color: white; font-weight: bold;' # Koyu Kahverengi
+        if val == '⛔': return 'background-color: #b71c1c; color: white; font-size: 1.2rem; text-align: center;'
+        if val == '✅': return 'background-color: #004d40; color: white; font-size: 1.2rem; text-align: center;'
+    return 'background-color: #111111; color: white;'
 
 def style_percentages(val):
     if isinstance(val, float):
         color = '#00ff88' if val > 0 else '#ff3333'
-        return f'color: {color} !important; font-weight: bold;'
+        return f'color: {color}; font-weight: bold;'
     return ''
 
 # ==========================================
