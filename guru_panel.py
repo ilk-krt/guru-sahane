@@ -7,248 +7,267 @@ import graphviz
 import random
 from datetime import datetime
 
-# --- 0. AYARLAR & STATE YÖNETİMİ ---
-st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION", page_icon="🏛️")
+# ==========================================
+# 0. AYARLAR & CSS (DARK MODE & KONTRAST)
+# ==========================================
+st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V127", page_icon="🏛️")
 
-# CSS: Aether Estetiği - Yüksek Kontrastlı Karanlık Tema (Dark Mode Fix)
 st.markdown("""
     <style>
-    /* Ana Arka Plan ve Metin Rengi */
     .stApp { background-color: #050505 !important; color: #e0e0e0 !important; }
-    
-    /* Tablo ve Dataframe Arka Planları (Beyaz fonu ezmek için) */
     [data-testid="stTable"], [data-testid="stDataFrame"] { background-color: #111111 !important; color: #e0e0e0 !important; }
     th { background-color: #222222 !important; color: #00ff88 !important; border-bottom: 1px solid #444 !important; }
     td { border-bottom: 1px solid #333 !important; }
-    
-    /* Expander (Açılır Menü) Arka Planları */
-    [data-testid="stExpander"] { background-color: #111111 !important; border: 1px solid #333 !important; border-radius: 8px !important; }
-    [data-testid="stExpander"] summary { color: #e0e0e0 !important; font-weight: bold; }
-    
-    /* Buton Renkleri (Kontrast için) */
     div.stButton > button { background-color: #222222 !important; color: #ffffff !important; border: 1px solid #444 !important; }
     div.stButton > button:hover { border-color: #00ff88 !important; color: #00ff88 !important; }
-    
-    /* Özel Sinyal ve Metin Sınıfları */
-    .news-summary-pos { color: #00ff88; font-weight: bold; cursor: pointer; }
-    .news-summary-neg { color: #ff3333; font-weight: bold; cursor: pointer; }
-    .fv-up { color: #00ff88; font-weight: bold; font-size: 1.2rem; }
-    .fv-down { color: #ff3333; font-weight: bold; font-size: 1.2rem; }
-    .signal-buy { background-color: #004400; color: #00ff88; padding: 5px 10px; border-radius: 5px; border: 1px solid #00ff88; display: inline-block; font-weight: bold;}
-    .signal-sell { background-color: #440000; color: #ff3333; padding: 5px 10px; border-radius: 5px; border: 1px solid #ff3333; display: inline-block; font-weight: bold;}
-    .signal-wait { background-color: #222222; color: #ffffff; padding: 5px 10px; border-radius: 5px; border: 1px solid #666666; display: inline-block; font-weight: bold;}
+    .news-box { background-color: #111; border-left: 4px solid; padding: 15px; margin: 10px 0; border-radius: 4px; }
+    .news-pos { border-left-color: #00ff88; color: #e0e0e0; }
+    .news-neg { border-left-color: #ff3333; color: #e0e0e0; }
+    .news-neu { border-left-color: #f1c40f; color: #e0e0e0; }
     </style>
 """, unsafe_allow_html=True)
 
-# Oturum Değişkenleri
 if 'macro_state' not in st.session_state: st.session_state.macro_state = "neutral"
 if 'macro_impact' not in st.session_state: st.session_state.macro_impact = "neutral"
-if 'show_macro_news' not in st.session_state: st.session_state.show_macro_news = False
 if 'active_asset' not in st.session_state: st.session_state.active_asset = None
-if 'active_sector' not in st.session_state: st.session_state.active_sector = None
 
-# --- VERİ MOTORU ---
-SECTORS = {
-    "Teknoloji (AI & Çip)": {"Leaders": ["NVDA", "AVGO", "MSFT"], "Laggards": ["INTC", "CSCO"]},
-    "Enerji & Altyapı": {"Leaders": ["SMR", "CEG", "VST"], "Laggards": ["XOM", "CVX"]},
-    "Finans": {"Leaders": ["JPM", "GS"], "Laggards": ["BAC", "C"]},
-    "Tüketim": {"Leaders": ["AMZN", "COST"], "Laggards": ["NKE", "SBUX"]}
-}
-
+# ==========================================
+# 1. VERİ HARİTASI & HABER KÜTÜPHANESİ
+# ==========================================
 ASSET_GROUPS = ["Hisse Senedi", "Tahvil", "Emtia", "Kripto", "Forex", "Gayrimenkul"]
 
-# --- QUANTUM FUSION CORE (V127 ARCHITECT) ---
-def apply_quantum_fusion(df):
-    df['vol_avg'] = df['volume'].rolling(window=20).mean()
-    df['std_vol'] = df['volume'].rolling(window=20).std()
-    df['is_whale_vol'] = df['volume'] > (df['vol_avg'] + (df['std_vol'] * 1.5))
-    df['whale_pwr'] = (df['volume'] / df['vol_avg']) * ((df['close'] - df['low']) / (df['high'] - df['low'] + 1e-6))
-    
-    df['fusion_score'] = 0
-    df['ema_1'] = df['close'].ewm(span=1, adjust=False).mean()
-    df.loc[df['close'] > df['ema_1'], 'fusion_score'] += 1
-    df.loc[df['whale_pwr'] > 0.5, 'fusion_score'] += 2
-    df.loc[df['is_whale_vol'], 'fusion_score'] += 1
-    
-    # Tuzak Kontrolü (Yazısız Sadece Emojili Sistem)
-    df['is_bull_trap'] = (df['close'] > df['close'].shift(1)) & (df['whale_pwr'] < df['whale_pwr'].shift(1))
-    return df
+MACRO_INFO = {
+    "LEADING": {
+        "score": 75, "color": "#00ff88", "impact": "positive",
+        "desc": "Öncü Göstergeler: Ekonominin gelecekteki yönünü (3-6 ay) tahmin eder. İmalat siparişleri ve tüketici güvenini kapsar.",
+        "news": "Küresel tedarik zinciri verileri ve yeni imalat siparişleri son çeyrekte %4.2 oranında beklenmedik bir artış gösterdi. Bu durum, önümüzdeki altı ay için sanayi üretiminde güçlü bir toparlanmaya ve risk iştahının artmasına işaret ediyor."
+    },
+    "COINCIDENT": {
+        "score": 45, "color": "#ff3333", "impact": "negative",
+        "desc": "Eşzamanlı Göstergeler: Ekonominin anlık durumunu gösterir. Mevcut GSYİH, sanayi üretimi ve perakende satışları yansıtır.",
+        "news": "Artan kredi faizleri ve daralan hanehalkı bütçeleri nedeniyle perakende satış verilerinde belirgin bir yavaşlama kaydedildi. Tüketici harcamalarındaki bu reel düşüş, anlık ekonomik aktivitenin baskı altında olduğunu doğruluyor."
+    },
+    "LAGGING": {
+        "score": 55, "color": "#f1c40f", "impact": "neutral",
+        "desc": "Gecikmeli Göstergeler: Ekonomik trendlerin teyidi için kullanılır. İşsizlik oranları ve enflasyon verilerini içerir.",
+        "news": "Geçmiş döneme ait çekirdek enflasyon verileri ve işgücü piyasası raporları, merkez bankasının sıkılaşma politikalarının gecikmeli etkilerini dengeli bir şekilde yansıtmaya başladı."
+    }
+}
 
-# --- GÖRSEL BİLEŞENLER ---
+SECTORS_INFO = {
+    "Teknoloji & Yapay Zeka": {
+        "tickers": ["NVDA", "AVGO", "MSFT", "AMD", "SMCI"],
+        "news": "Yapay zeka altyapısına ve veri merkezlerine yönelik artan donanım talebi, lider çip üreticilerinin önümüzdeki iki çeyrek için gelir beklentilerini yukarı yönlü revize etmesine neden oldu. Ancak tedarik zinciri kısıtlamaları bazı alt üreticilerde gecikmelere yol açıyor.",
+        "trend": "Pozitif"
+    },
+    "Enerji & Altyapı": {
+        "tickers": ["SMR", "CEG", "VST", "XOM", "CVX"],
+        "news": "Veri merkezlerinin yarattığı devasa elektrik ihtiyacını karşılamak için yeni nesil nükleer reaktör projelerine sağlanan teşvikler onaylandı. Fosil yakıt talebinde ise jeopolitik arz endişelerine rağmen kısmi bir durgunluk gözlemleniyor.",
+        "trend": "Pozitif"
+    },
+    "Savunma & Uzay": {
+        "tickers": ["RTX", "LMT", "RKLB", "SPCE", "KTOS"],
+        "news": "Küresel savunma bütçelerindeki artışlar ve yeni nesil uydu ağlarına yapılan yatırımlar hız kazandı. Büyük ihalelerin dağıtımı, özellikle uzay taşımacılığı yapan şirketlerin sipariş defterlerini tarihi zirvelere taşıdı.",
+        "trend": "Nötr"
+    },
+    "Finans & Ödeme Sist.": {
+        "tickers": ["JPM", "GS", "PYPL", "MA", "SQ"],
+        "news": "Geleneksel bankacılık sektörü yüksek faiz ortamında kar marjlarını korumaya çalışırken, tüketici kredilerindeki temerrüt oranlarının hafifçe artması bölgesel bankalar üzerinde baskı yaratmaya başladı.",
+        "trend": "Negatif"
+    }
+}
+
+# ==========================================
+# 2. QUANTUM ENGINE (V127.0 - 3 Mum Kuralı Yok)
+# ==========================================
+def calculate_signals(ticker_list):
+    results = []
+    for t in ticker_list:
+        price = np.random.uniform(15, 800)
+        fusion_score = random.randint(1, 5)
+        whale_pwr = random.uniform(20, 95)
+        is_bull_trap = random.choice([True, False]) if whale_pwr < 40 else False
+        
+        if is_bull_trap: signal = "SELL ⛔"
+        elif fusion_score >= 4: signal = "BUY ✅"
+        elif whale_pwr > 70: signal = "BUY ✅"
+        else: signal = "WAIT ⚪"
+        
+        results.append({
+            "Hisse": t,
+            "Sinyal": signal,
+            "Fiyat": f"${price:.2f}",
+            "Whale Power": f"%{whale_pwr:.1f}",
+            "Fusion": f"{fusion_score}/5"
+        })
+    return pd.DataFrame(results)
+
+# ==========================================
+# 3. GÖRSEL BİLEŞENLER
+# ==========================================
 def draw_gauge(value, title, color):
     fig = go.Figure(go.Indicator(
-        mode = "gauge+number", 
-        value = value, 
+        mode = "gauge+number", value = value, 
         title = {'text': title, 'font': {'size': 14, 'color': 'white'}},
         number = {'font': {'color': 'white'}},
-        gauge = {
-            'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"}, 
-            'bar': {'color': color}, 
-            'bgcolor': "#111111", 
-            'steps': [{'range': [0, 50], 'color': '#222222'}, {'range': [50, 100], 'color': '#333333'}]}
+        gauge = {'axis': {'range': [0, 100], 'tickwidth': 1, 'tickcolor': "white"}, 
+                 'bar': {'color': color}, 'bgcolor': "#111111", 
+                 'steps': [{'range': [0, 50], 'color': '#222222'}, {'range': [50, 100], 'color': '#333333'}]}
     ))
-    fig.update_layout(height=180, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)', font={'color': "white"})
+    fig.update_layout(height=180, margin=dict(l=10, r=10, t=30, b=10), paper_bgcolor='rgba(0,0,0,0)')
     return fig
 
 def draw_neuro_links():
     dot = graphviz.Digraph()
-    dot.attr(bgcolor='#050505', rankdir='TB', size='8,8')
+    dot.attr(bgcolor='#050505', rankdir='TB', size='10,6')
     
-    if st.session_state.macro_impact == "positive": link_color = "#00ff88"
-    elif st.session_state.macro_impact == "negative": link_color = "#ff3333"
-    else: link_color = "#888888"
+    impact = st.session_state.macro_impact
+    link_color = "#00ff88" if impact == "positive" else "#ff3333" if impact == "negative" else "#f1c40f"
+    edge_label = "POZİTİF ETKİ" if impact == "positive" else "NEGATİF ETKİ" if impact == "negative" else "NÖTR ETKİ"
+    
+    # Kök Düğüm (Makro Durum)
+    dot.node("MACRO", "🌍 MAKRO GÜÇ", shape='ellipse', style='filled', fillcolor='#222', fontcolor='white', color=link_color, penwidth='3')
 
+    # Varlık Sınıfları Düğümleri
     for i in range(0, len(ASSET_GROUPS), 3):
         with dot.subgraph() as s:
             s.attr(rank='same')
             for asset in ASSET_GROUPS[i:i+3]:
                 fill = '#333333' if asset == st.session_state.active_asset else '#111111'
-                border = link_color if st.session_state.macro_impact != "neutral" else '#555555'
-                dot.node(asset, asset, shape='box', style='filled,rounded', fillcolor=fill, fontcolor='white', color=border, penwidth='2')
-    
-    for i in range(len(ASSET_GROUPS)-1):
-        dot.edge(ASSET_GROUPS[i], ASSET_GROUPS[i+1], color=link_color, style='dashed', penwidth='2')
-    
+                dot.node(asset, asset, shape='box', style='filled,rounded', fillcolor=fill, fontcolor='white', color='#444')
+                # Makrodan varlıklara bağlantı ve üzerine etki yazısı
+                dot.edge("MACRO", asset, label=f" {edge_label} ", color=link_color, fontcolor=link_color, style='bold', fontsize='10')
+
     st.graphviz_chart(dot)
 
-# --- ANA UYGULAMA ---
+# ==========================================
+# 4. ANA KOKPİT EKRANI
+# ==========================================
 st.title("🏛️ AETHER MACRO SYSTEM")
 
+# --- MAKRO PANELLER ---
 col1, col2, col3 = st.columns(3)
-macros = [("LEADING", 75, "#00ff88", "positive"), ("COINCIDENT", 45, "#ff3333", "negative"), ("LAGGING", 55, "#f1c40f", "neutral")]
 
-for i, (name, val, color, impact) in enumerate(macros):
+for i, (name, data) in enumerate(MACRO_INFO.items()):
     with [col1, col2, col3][i]:
-        st.plotly_chart(draw_gauge(val, name, color), use_container_width=True)
+        st.plotly_chart(draw_gauge(data['score'], name, data['color']), use_container_width=True)
+        st.caption(data['desc'])
         
         btn_c1, btn_c2 = st.columns(2)
-        if btn_c1.button(f"🔗 Etki", key=f"short_{name}"):
+        if btn_c1.button(f"🔗 Ağı Tetikle", key=f"net_{name}"):
             st.session_state.macro_state = name
-            st.session_state.macro_impact = impact
-            st.session_state.show_macro_news = False
+            st.session_state.macro_impact = data['impact']
             st.session_state.active_asset = None
-            st.session_state.active_sector = None
             st.rerun()
             
-        if btn_c2.button(f"📰 Haber", key=f"long_{name}"):
-            st.session_state.macro_state = name
-            st.session_state.macro_impact = impact
-            st.session_state.show_macro_news = True
+        if btn_c2.button(f"📰 Haber Detayı", key=f"news_{name}"):
+            st.session_state.show_news_for = name
             st.rerun()
 
-if st.session_state.show_macro_news:
-    st.divider()
-    st.subheader(f"📡 {st.session_state.macro_state} - Son Haberler")
-    for j in range(10, 0, -1):
-        is_pos = (j % 2 == 0) if st.session_state.macro_impact == "neutral" else (st.session_state.macro_impact == "positive")
-        cls, icon = ("news-summary-pos", "🟢") if is_pos else ("news-summary-neg", "🔴")
-        st.markdown(f"<span class='{cls}'>{icon} Haber {j}: Global piyasalarda aktivite ve likidite akışı raporlandı.</span>", unsafe_allow_html=True)
+# Makro Haber Gösterimi
+if 'show_news_for' in st.session_state and st.session_state.show_news_for in MACRO_INFO:
+    sel_macro = MACRO_INFO[st.session_state.show_news_for]
+    box_class = "news-pos" if sel_macro['impact'] == "positive" else "news-neg" if sel_macro['impact'] == "negative" else "news-neu"
+    icon = "🟢" if sel_macro['impact'] == "positive" else "🔴" if sel_macro['impact'] == "negative" else "🟡"
+    
+    st.markdown(f"""
+        <div class="news-box {box_class}">
+            <strong>{icon} {st.session_state.show_news_for} Sinyalini Değiştiren Son Gelişme:</strong><br>
+            {sel_macro['news']}
+        </div>
+    """, unsafe_allow_html=True)
 
+# --- NÖRO AĞ BÖLÜMÜ ---
 st.divider()
-st.subheader("🔗 Varlık Nöro-Ağı")
+st.subheader("🔗 Varlık Nöro-Ağı Etkileşimi")
 draw_neuro_links()
 
+st.write("**Detaylı tarama için ağ üzerinden etkilenen varlık sınıfını seçin:**")
 asset_cols = st.columns(3)
 for i, asset in enumerate(ASSET_GROUPS):
     with asset_cols[i % 3]:
         if st.button(asset, use_container_width=True):
             st.session_state.active_asset = asset
-            st.session_state.active_sector = None
             st.rerun()
 
+# --- SEKTÖR VE HİSSE TARAMASI (YENİ DATAFRAME ON_SELECT YAPISI) ---
 if st.session_state.active_asset == "Hisse Senedi":
     st.divider()
-    st.subheader("📊 Sektörel Etkileşim")
-    sec_cols = st.columns(2)
-    
-    for i, sector_name in enumerate(SECTORS.keys()):
-        with sec_cols[i % 2]:
-            if st.button(sector_name, use_container_width=True):
-                st.session_state.active_sector = sector_name
-                st.rerun()
+    st.subheader("📊 Sektör Bazlı Radar Taraması")
+    st.caption("Ayrıntılı haberleri ve hisse listesini görmek için aşağıdaki tablodan bir sektöre tıklayın.")
 
-if st.session_state.active_sector:
-    st.divider()
-    st.subheader(f"🎯 {st.session_state.active_sector} Taraması")
-    
-    col_lead, col_lag = st.columns(1)
-    
-    with col_lead:
-        st.markdown("### 🟢 Öne Çıkanlar (Leaders)")
-        for ticker in SECTORS[st.session_state.active_sector]["Leaders"]:
-            with st.expander(f"💎 {ticker} Analizi"):
-                signal_type = "BUY"
-                signal_class = "signal-buy"
-                st.markdown(f"<span class='{signal_class}'>Sinyal: {signal_type} ✅</span>", unsafe_allow_html=True)
-                st.write("")
-                
-                fv = np.random.uniform(150, 900)
-                prev_fv = fv - np.random.uniform(5, 20)
-                fv_class = "fv-up" if fv > prev_fv else "fv-down"
-                arrow = "⬆️" if fv > prev_fv else "⬇️"
-                
-                st.markdown(f"**Fair Value:** <span class='{fv_class}'>${fv:.2f} {arrow}</span>", unsafe_allow_html=True)
-                
-                st.markdown("<div class='news-summary-pos'>🟢 Sektörel talep artışı beklentileri aştı.</div>", unsafe_allow_html=True)
-                with st.expander("Detayı Oku"):
-                    st.caption("Şirket, operasyonel hedeflerini başarıyla revize etti ve maliyet optimizasyonunu sağladı.")
-                
-    with col_lead: 
-        st.markdown("### 🔴 Geride Kalanlar (Laggards)")
-        for ticker in SECTORS[st.session_state.active_sector]["Laggards"]:
-            with st.expander(f"⚠️ {ticker} Analizi"):
-                signal_type = "SELL"
-                signal_class = "signal-sell"
-                st.markdown(f"<span class='{signal_class}'>Sinyal: {signal_type} ⛔</span>", unsafe_allow_html=True)
-                st.write("")
-                
-                fv = np.random.uniform(20, 100)
-                prev_fv = fv + np.random.uniform(2, 10)
-                fv_class = "fv-up" if fv > prev_fv else "fv-down"
-                arrow = "⬆️" if fv > prev_fv else "⬇️"
-                
-                st.markdown(f"**Fair Value:** <span class='{fv_class}'>${fv:.2f} {arrow}</span>", unsafe_allow_html=True)
-                
-                st.markdown("<div class='news-summary-neg'>🔴 Kar marjlarında daralma devam ediyor.</div>", unsafe_allow_html=True)
-                with st.expander("Detayı Oku"):
-                    st.caption("Artan operasyonel maliyetler ve talep daralması karlılığı baskılamaya devam ediyor.")
+    # Sektörleri DataFrame'e dönüştür
+    sec_df_data = []
+    for sec_name, sec_data in SECTORS_INFO.items():
+        sec_df_data.append({
+            "Sektör": sec_name,
+            "Genel Trend": sec_data["trend"],
+            "İzlenen Hisse Sayısı": len(sec_data["tickers"])
+        })
+    df_sectors = pd.DataFrame(sec_df_data)
 
-# --- PORTFÖY BÖLÜMÜ (TÜM LİSTE ENTEGRE EDİLDİ) ---
+    def color_trend(val):
+        if val == 'Pozitif': return 'color: #00ff88; font-weight: bold;'
+        elif val == 'Negatif': return 'color: #ff3333; font-weight: bold;'
+        return 'color: #f1c40f; font-weight: bold;'
+
+    # Interactive DataFrame
+    sec_selection = st.dataframe(
+        df_sectors.style.map(color_trend, subset=['Genel Trend']),
+        use_container_width=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key="sector_table",
+        hide_index=True
+    )
+
+    # Bir Sektör Seçildiğinde...
+    if sec_selection.selection.rows:
+        selected_row_idx = sec_selection.selection.rows[0]
+        selected_sector_name = df_sectors.iloc[selected_row_idx]["Sektör"]
+        sec_details = SECTORS_INFO[selected_sector_name]
+
+        st.success(f"🎯 **Odaklanılan Sektör:** {selected_sector_name}")
+        
+        # Kesintisiz Tam Cümle Sektör Haberi
+        trend_class = "news-pos" if sec_details['trend'] == "Pozitif" else "news-neg" if sec_details['trend'] == "Negatif" else "news-neu"
+        st.markdown(f"""
+            <div class="news-box {trend_class}">
+                <strong>Sektörel Dinamikleri Değiştiren Son Gelişmeler:</strong><br>
+                {sec_details['news']}
+            </div>
+        """, unsafe_allow_html=True)
+
+        # Seçili Sektörün Hisselerini Hesapla ve Göster
+        st.write(f"**{selected_sector_name} İçindeki Aktif Sinyaller:**")
+        df_sector_stocks = calculate_signals(sec_details['tickers'])
+        
+        def color_signals(val):
+            if 'BUY' in val: return 'background-color: #004400; color: #00ff88;'
+            elif 'SELL' in val: return 'background-color: #440000; color: #ff3333;'
+            return 'background-color: #222; color: white;'
+            
+        st.dataframe(
+            df_sector_stocks.style.map(color_signals, subset=['Sinyal']),
+            use_container_width=True,
+            hide_index=True
+        )
+
+# --- PORTFÖY BÖLÜMÜ ---
 st.divider()
-st.subheader("📋 Kendi Portföyüm")
-st.write("Sütun başlıklarına tıklayarak sıralama yapabilirsiniz. Aşağı kaydırarak tüm hisseleri görebilirsiniz.")
-
-# Kullanıcının verdiği tüm hisselerin benzersiz listesi (Mükerrer olanlar tekilleştirildi)
+st.subheader("📋 Genel Portföy (Tüm İzleme Listesi)")
 raw_tickers = ["NVDA", "AMD", "TSM", "ASML", "AVGO", "ARM", "AXTI", "SMCI", "AI", "GOOG", "META", "IONQ", "NBIS", "ADBE", "DT", "S", "EXTR", "OUST", "ONDS", "RKLB", "SIDU", "SPIR", "BKSY", "SATL", "SPCE", "RTX", "KTOS", "SMR", "NNE", "CEG", "TLN", "BKR", "ASTI", "IREN", "WULF", "SLNH", "HIMS", "TDOC", "OSCR", "AMGN", "PFE", "GMAB", "CLPT", "IINN", "QCLS", "PYPL", "MA", "PGY", "OPEN", "CRML", "ATLX", "BMNR", "STLA", "CARR", "CPRT", "GRAB", "SFM", "HITI", "TRUG", "SBET", "T", "P", "SILJ", "PPLT", "PALL", "COPX", "GDXJ", "UFO", "BULL", "CRM", "SNOW", "NOW", "LMT", "CIFR", "VST", "DGXX"]
 portfolio_tickers = sorted(list(set(raw_tickers)))
 
-# Dinamik Portföy Veri Simülasyonu
-port_data = []
-for ticker in portfolio_tickers:
-    price = np.random.uniform(10, 500)
-    fv = price + np.random.uniform(-40, 60)
-    change_1d = np.random.uniform(-5, 5)
-    change_1w = np.random.uniform(-15, 20)
-    signal = random.choice(["BUY ✅", "WAIT ⚪", "SELL ⛔"])
-    
-    port_data.append({
-        "Hisse": ticker,
-        "Sinyal": signal,
-        "Güncel Fiyat": f"${price:.2f}",
-        "Fair Value": f"${fv:.2f}",
-        "1 Gün (%)": float(f"{change_1d:.2f}"), # Sıralanabilmesi için sayısal bırakıldı
-        "1 Hafta (%)": float(f"{change_1w:.2f}")
-    })
+df_port_full = calculate_signals(portfolio_tickers)
 
-# Pandas DataFrame oluştur ve Streamlit ile etkileşimli tablo olarak yansıt
-df_port = pd.DataFrame(port_data)
+def style_full_port(val):
+    if isinstance(val, str):
+        if 'BUY' in val: return 'color: #00ff88; font-weight: bold;'
+        if 'SELL' in val: return 'color: #ff3333; font-weight: bold;'
+    return ''
 
-# Verileri renklendiren özel bir fonksiyon (1 Gün ve 1 Hafta için)
-def color_surplusvalue(val):
-    color = '#00ff88' if val > 0 else '#ff3333'
-    return f'color: {color}; font-weight: bold;'
-
-styled_df = df_port.style.map(color_surplusvalue, subset=['1 Gün (%)', '1 Hafta (%)'])
-
-# Scroll edilebilir ve sıralanabilir tablo (st.table yerine st.dataframe)
-st.dataframe(styled_df, use_container_width=True, height=500)
+st.dataframe(
+    df_port_full.style.map(style_full_port, subset=['Sinyal']),
+    use_container_width=True, height=400, hide_index=True
+)
