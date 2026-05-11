@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 # ==========================================
 # 0. AYARLAR & AGRESİF DARK MODE CSS
 # ==========================================
-st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V127.6", page_icon="🏛️")
+st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V127.7", page_icon="🏛️")
 
 st.markdown("""
     <style>
@@ -166,7 +166,7 @@ def get_sector_status(sector_name, trigger):
     return base_charge, prev, delta_icon, news
 
 # ==========================================
-# 3. GÖRSEL MOTORLAR
+# 3. GÖRSEL MOTORLAR (YENİLENMİŞ GRAPHVIZ)
 # ==========================================
 def draw_battery_with_delta(label, current, previous, delta_icon):
     color = "#00ff88" if current >= 75 else "#f1c40f" if current >= 45 else "#ff3333"
@@ -183,30 +183,30 @@ def draw_battery_with_delta(label, current, previous, delta_icon):
 def draw_smart_money_flow(trigger_data):
     dot = graphviz.Digraph()
     
-    # Yüksek çözünürlük, sığdırma (size) kısıtlamasının kaldırılması
-    dot.attr(bgcolor='#050505', rankdir='LR', dpi='300')
-    dot.attr('node', fontsize='28', fontname='Arial', margin='0.3,0.1')
-    dot.attr('edge', fontsize='24')
+    # Kutu sabitlemeyi ve DPI oynamalarını tamamen kaldırdık. Doğal genişleme ve mesafeler eklendi.
+    dot.attr(bgcolor='#050505', rankdir='LR', ranksep='1.5', nodesep='0.8')
+    dot.attr('node', fontsize='16', fontname='Arial', margin='0.2,0.1')
+    dot.attr('edge', fontsize='14')
     
     with dot.subgraph(name='cluster_0') as c:
-        c.attr(style='dashed', color='#555', label='Kaydi Varlıklar', fontcolor='#e0e0e0', fontsize='36')
+        c.attr(style='dashed', color='#555', label='Kaydi Varlıklar', fontcolor='#e0e0e0', fontsize='18')
         c.node("FIAT", "Fiat\nCurrency", shape='ellipse', style='filled', fillcolor='#4a148c', fontcolor='white')
-        c.node("USD", "USD\n(Merkez)", shape='circle', style='filled', fillcolor='#0277bd', fontcolor='white', width='2.5', fixedsize='true')
-        c.node("STOCK", "Borsalar", shape='box', style='filled', fillcolor='#f57f17', fontcolor='white', height='1.5')
-        c.node("BOND", "Tahviller", shape='box', style='filled', fillcolor='#2e7d32', fontcolor='white', height='1.5')
-        c.node("CRYPTO", "Kripto", shape='box', style='filled', fillcolor='#d81b60', fontcolor='white', height='1.5')
+        c.node("USD", "USD\n(Merkez)", shape='circle', style='filled', fillcolor='#0277bd', fontcolor='white')
+        c.node("STOCK", "Borsalar", shape='box', style='filled', fillcolor='#f57f17', fontcolor='white')
+        c.node("BOND", "Tahviller", shape='box', style='filled', fillcolor='#2e7d32', fontcolor='white')
+        c.node("CRYPTO", "Kripto", shape='box', style='filled', fillcolor='#d81b60', fontcolor='white')
         
     with dot.subgraph(name='cluster_1') as c:
-        c.attr(style='dashed', color='#555', label='Maddi Varlıklar', fontcolor='#e0e0e0', fontsize='36')
-        c.node("COMM", "Emtia &\nEnerji", shape='circle', style='filled', fillcolor='#00695c', fontcolor='white', width='2.4', fixedsize='true')
-        c.node("GOLD", "Değer\nSaklama", shape='circle', style='filled', fillcolor='#fbc02d', fontcolor='black', width='2.4', fixedsize='true')
-        c.node("REAL", "Gayrimenkul", shape='box', style='filled', fillcolor='#827717', fontcolor='white', height='1.5')
+        c.attr(style='dashed', color='#555', label='Maddi Varlıklar', fontcolor='#e0e0e0', fontsize='18')
+        c.node("COMM", "Emtia &\nEnerji", shape='circle', style='filled', fillcolor='#00695c', fontcolor='white')
+        c.node("GOLD", "Değer\nSaklama", shape='circle', style='filled', fillcolor='#fbc02d', fontcolor='black')
+        c.node("REAL", "Gayrimenkul", shape='box', style='filled', fillcolor='#827717', fontcolor='white')
 
     bat = trigger_data['battery']
-    def get_pen(val): return str(max(3.0, val / 6))
+    def get_pen(val): return str(max(2.0, val / 10)) # Kalem kalınlığı optimize edildi
     def get_col(val): return "#00ff88" if val >= 60 else "#ff3333" if val <= 40 else "#888"
 
-    dot.edge("FIAT", "USD", color="#aaa", penwidth="5")
+    dot.edge("FIAT", "USD", color="#aaa", penwidth="3")
     dot.edge("USD", "STOCK", color=get_col(bat['Stocks']), penwidth=get_pen(bat['Stocks']))
     dot.edge("USD", "BOND", color=get_col(bat['Bonds']), penwidth=get_pen(bat['Bonds']))
     dot.edge("USD", "CRYPTO", color=get_col(bat['Crypto']), penwidth=get_pen(bat['Crypto']))
