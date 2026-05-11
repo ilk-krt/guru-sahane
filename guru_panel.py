@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 # ==========================================
 # 0. AYARLAR & AGRESİF DARK MODE CSS
 # ==========================================
-st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V127.9", page_icon="🏛️")
+st.set_page_config(layout="wide", page_title="AETHER QUANTUM FUSION V128.0", page_icon="🏛️")
 
 st.markdown("""
     <style>
@@ -54,7 +54,7 @@ if 'active_sector' not in st.session_state:
     st.session_state.active_sector = None
 
 # ==========================================
-# 1. GENİŞLETİLMİŞ VERİ HARİTASI
+# 1. GENİŞLETİLMİŞ VERİ HARİTASI (Günlük Tarama İçin)
 # ==========================================
 GLOBAL_MAP = {
     "Teknoloji (XLK)": ["SMH", "SOXX", "CIBR", "IGV", "BOTZ", "ARKF"],
@@ -97,7 +97,20 @@ ETF_INFO = {
 }
 
 # ==========================================
-# 2. MAKRO TETİKLEYİCİLER & SEKTÖR MOTORU
+# 2. 4H RADAR UNIVERSE (S&P500 & NASDAQ Temsili Mega Liste)
+# ==========================================
+SP500_NASDAQ_UNIVERSE = {
+    "Teknoloji": ["AAPL", "MSFT", "NVDA", "AVGO", "ORCL", "CSCO", "ADBE", "CRM", "AMD", "INTC", "TXN", "QCOM", "AMAT", "MU", "PANW", "SNOW", "PLTR", "CRWD", "SMCI", "ARM"],
+    "İletişim & Sosyal": ["GOOGL", "META", "NFLX", "DIS", "CMCSA", "VZ", "T", "TMUS", "SNAP", "PINS", "RDDT"],
+    "Tüketim": ["AMZN", "TSLA", "HD", "MCD", "NKE", "SBUX", "BKNG", "MAR", "LULU", "WMT", "COST", "TGT", "KO", "PEP", "PG", "PM"],
+    "Finans": ["JPM", "BAC", "WFC", "C", "GS", "MS", "AXP", "V", "MA", "PYPL", "SQ", "COIN", "HOOD"],
+    "Sağlık": ["LLY", "UNH", "JNJ", "ABBV", "MRK", "PFE", "AMGN", "ISRG", "MDT", "VRTX", "MRNA"],
+    "Sanayi & Savunma": ["GE", "CAT", "BA", "LMT", "RTX", "GD", "NOC", "UNP", "UPS", "UBER"],
+    "Enerji & Altyapı": ["XOM", "CVX", "COP", "SLB", "OXY", "CEG", "VST", "SMR", "CCJ", "NEE"]
+}
+
+# ==========================================
+# 3. MAKRO TETİKLEYİCİLER & SEKTÖR MOTORU
 # ==========================================
 SYSTEM_TRIGGERS = {
     "GEOPOLITIK": {
@@ -166,7 +179,7 @@ def get_sector_status(sector_name, trigger):
     return base_charge, prev, delta_icon, news
 
 # ==========================================
-# 3. GÖRSEL MOTORLAR (GRAPHVIZ & RRG)
+# 4. GÖRSEL MOTORLAR (GRAPHVIZ & RRG)
 # ==========================================
 def draw_battery_with_delta(label, current, previous, delta_icon):
     color = "#00ff88" if current >= 75 else "#f1c40f" if current >= 45 else "#ff3333"
@@ -245,7 +258,7 @@ def draw_rrg_chart():
     return fig, df_rrg
 
 # ==========================================
-# 4. YFINANCE OMNI FUSION (VEKTÖREL MOTOR)
+# 5. YFINANCE OMNI FUSION (VEKTÖREL GÜNLÜK MOTOR)
 # ==========================================
 @st.cache_data(ttl=900)
 def calculate_signals(ticker_list):
@@ -346,22 +359,122 @@ def calculate_signals(ticker_list):
     if results: return pd.DataFrame(results).sort_values(by="Fusion", ascending=False)
     return pd.DataFrame()
 
+
+# ==========================================
+# 6. YFINANCE 4H MACRO RADAR SİSTEMİ (YENİ)
+# ==========================================
+@st.cache_data(ttl=3600) # Her saat başı 1 kez çeker
+def run_4h_market_scanner():
+    results = []
+    # Tüm evrendeki hisseleri tek bir listeye alıyoruz
+    all_tickers = []
+    ticker_to_sector = {}
+    for sector, t_list in SP500_NASDAQ_UNIVERSE.items():
+        for t in t_list:
+            all_tickers.append(t)
+            ticker_to_sector[t] = sector
+            
+    all_tickers = list(set(all_tickers))
+    
+    end_date = datetime.now()
+    start_date = end_date - timedelta(days=30)
+    
+    try:
+        # 1 saatlik interval ile veri çekip, pandasta 4 saate çevireceğiz
+        raw_data = yf.download(all_tickers, start=start_date, end=end_date, interval="1h", group_by='ticker', progress=False)
+    except:
+        return pd.DataFrame()
+
+    for t in all_tickers:
+        try:
+            if len(all_tickers) > 1:
+                if t not in raw_data.columns.levels[0]: continue
+                df = raw_data[t].copy().dropna()
+            else:
+                df = raw_data.copy().dropna()
+
+            if df.empty: continue
+
+            # 1 Saatlik veriyi 4 Saatlik periyotlara dönüştürüyoruz (Resample)
+            df_4h = df.resample('4h').agg({
+                'Open': 'first',
+                'High': 'max',
+                'Low': 'min',
+                'Close': 'last',
+                'Volume': 'sum'
+            }).dropna()
+            
+            if len(df_4h) < 30: continue
+
+            close, high, low, open_p, vol = df_4h['Close'], df_4h['High'], df_4h['Low'], df_4h['Open'], df_4h['Volume']
+            
+            # --- 4H Whale Power ---
+            delta = close.diff()
+            gain = delta.where(delta > 0, 0).rolling(20).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(20).mean()
+            rsi_20 = 100 - (100 / (1 + (gain / loss.replace(0, 0.001))))
+            
+            c_range = (high - low).clip(lower=0.001)
+            delta_q = ((close - low) - (high - close)) / c_range
+            vol_sma = vol.rolling(20).mean().clip(lower=0.001)
+            delta_vol_q = (delta_q * vol).rolling(20).mean() / vol_sma
+            rvol = (vol / vol_sma.clip(lower=1)).clip(upper=2.5)
+            
+            base_pwr = ((rsi_20 - 50) + (delta_vol_q * 50)) * rvol * 1.5
+            logic_pwr = np.log(1 + np.exp(base_pwr / 5)) * 5
+            logic_pwr = np.where((low > high.shift(2)) & (close > open_p), logic_pwr + 35, logic_pwr)
+            
+            wp = np.minimum((np.log10(1 + np.clip(logic_pwr, 0, None)) * 65)**0.8 * 1.8, 100)
+            df_4h['wp'] = pd.Series(wp, index=df_4h.index).fillna(0)
+            
+            # --- 4H Whale Re-Entry ---
+            df_4h['wp_ma'] = df_4h['wp'].rolling(9).mean()
+            curr_wp, curr_ma = df_4h['wp'].iloc[-1], df_4h['wp_ma'].iloc[-1]
+            is_reentry = (curr_wp > curr_ma) and (df_4h['wp'].iloc[-2] <= df_4h['wp_ma'].iloc[-2]) and (curr_wp > 40) and (vol.iloc[-1] > vol_sma.iloc[-1] * 1.2)
+
+            # --- 4H Volatility Hole ---
+            sma20 = close.rolling(20).mean()
+            std20 = close.rolling(20).std()
+            b_up, b_low = sma20 + 2*std20, sma20 - 2*std20
+            
+            tr = pd.concat([high - low, abs(high - close.shift(1)), abs(low - close.shift(1))], axis=1).max(axis=1)
+            k_up, k_low = sma20 + 1.5*tr.rolling(14).mean(), sma20 - 1.5*tr.rolling(14).mean()
+            
+            is_sqz = (b_low > k_low) & (b_up < k_up)
+            vol_hole = is_sqz & (close <= (sma20 - ((k_up - sma20)/3.0)))
+
+            # Sadece bu iki durumu gerçekleştirenleri listeye ekle
+            if is_reentry or vol_hole.iloc[-1]:
+                sig = "🔄 WHALE RE-ENTRY" if is_reentry else "🕳️ VOLA HOLE"
+                
+                results.append({
+                    "Ticker": t,
+                    "Sektör": ticker_to_sector[t],
+                    "Sinyal (4H)": sig,
+                    "Fiyat": f"${close.iloc[-1]:.2f}",
+                    "Whale Power": float(f"{curr_wp:.1f}")
+                })
+        except Exception:
+            continue
+            
+    if results: return pd.DataFrame(results).sort_values(by="Whale Power", ascending=False)
+    return pd.DataFrame()
+
+
 # ==========================================
 # GÜNCELLENMİŞ STYLER: ZORUNLU KOYU ARKA PLANLAR
-# (Beyaz yazıların kaybolmaması için Dark Mode optimizasyonu)
 # ==========================================
 def style_signals(val):
     if isinstance(val, str):
-        # Tüm renkler Dark Mode beyaz yazısına uygun hale getirildi (Koyu tonlar kullanıldı)
-        if 'HYPER BUY' in val: return 'background-color: #827717; color: white; font-weight: bold;' # Koyu Altın
-        if 'HYPER SELL' in val: return 'background-color: #4a0000; color: white; font-weight: bold;' # Bordo
-        if 'WHALE RE-ENTRY' in val: return 'background-color: #006064; color: white; font-weight: bold;' # Koyu Turkuaz
-        if 'WHALE IN' in val: return 'background-color: #01579b; color: white;' # Koyu Mavi
-        if 'VOLA HOLE' in val: return 'background-color: #4a148c; color: white;' # Koyu Mor
-        if 'EXP BUY' in val: return 'background-color: #1b5e20; color: white; font-weight: bold;' # Koyu Orman Yeşili
-        if 'EXP SELL' in val: return 'background-color: #bf360c; color: white; font-weight: bold;' # Koyu Kiremit
-        if 'BUY' in val: return 'background-color: #004d40; color: white; font-weight: bold;' # Koyu Zümrüt Yeşili
-        if 'SELL' in val: return 'background-color: #3e2723; color: white; font-weight: bold;' # Koyu Kahverengi
+        if 'HYPER BUY' in val: return 'background-color: #827717; color: white; font-weight: bold;'
+        if 'HYPER SELL' in val: return 'background-color: #4a0000; color: white; font-weight: bold;'
+        if 'WHALE RE-ENTRY' in val: return 'background-color: #006064; color: white; font-weight: bold;'
+        if 'WHALE IN' in val: return 'background-color: #01579b; color: white;'
+        if 'VOLA HOLE' in val: return 'background-color: #4a148c; color: white;'
+        if 'EXP BUY' in val: return 'background-color: #1b5e20; color: white; font-weight: bold;'
+        if 'EXP SELL' in val: return 'background-color: #bf360c; color: white; font-weight: bold;'
+        if 'BUY' in val: return 'background-color: #004d40; color: white; font-weight: bold;'
+        if 'SELL' in val: return 'background-color: #3e2723; color: white; font-weight: bold;'
         if val == '⛔': return 'background-color: #b71c1c; color: white; font-size: 1.2rem; text-align: center;'
         if val == '✅': return 'background-color: #004d40; color: white; font-size: 1.2rem; text-align: center;'
     return 'background-color: #111111; color: white;'
@@ -373,7 +486,7 @@ def style_percentages(val):
     return ''
 
 # ==========================================
-# 5. ANA EKRAN KOKPİTİ
+# 7. ANA EKRAN KOKPİTİ
 # ==========================================
 st.title("🏛️ AETHER MACRO SYSTEM")
 
@@ -472,3 +585,19 @@ with st.spinner("Portföy simülasyonu ve veriler hesaplanıyor..."):
         )
     else:
         st.error("Yfinance sunucularından veri alınamadı.")
+
+# --- YENİ EKLENEN: 4H MACRO RADAR (S&P 500 & NASDAQ) ---
+st.divider()
+st.subheader("🦅 AETHER MARKET RADAR (S&P 500 & NASDAQ - 4H SCAN)")
+st.markdown("<p style='color:#ccc; font-size:0.9rem;'>Son 4 Saatlik periyotta <strong>Whale Re-Entry (Balina Girişi)</strong> veya <strong>Volatility Hole (Vakum)</strong> gerçekleştiren dev şirketler taranıyor...</p>", unsafe_allow_html=True)
+
+with st.spinner("Tüm Piyasalar (S&P500 & Nasdaq) Son 4 Saatlik Mumlar Taranıyor... (Bu işlem yfinance yoğunluğuna göre biraz sürebilir)"):
+    df_4h_radar = run_4h_market_scanner()
+    if not df_4h_radar.empty:
+        st.success(f"Tarama Tamamlandı! {len(df_4h_radar)} adet fırsat tespit edildi.")
+        st.dataframe(
+            df_4h_radar.style.map(style_signals, subset=['Sinyal (4H)']),
+            use_container_width=True, hide_index=True
+        )
+    else:
+        st.warning("Son 4 saatlik periyotta belirlenen şartları (Whale Re-Entry veya Volatility Hole) sağlayan büyük piyasa hissesi bulunamadı veya piyasa kapalı.")
