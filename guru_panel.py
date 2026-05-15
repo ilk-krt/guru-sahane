@@ -10,7 +10,7 @@ import calendar
 # ==========================================
 # 0. AYARLAR & AGRESİF DARK MODE CSS
 # ==========================================
-st.set_page_config(layout="wide", page_title="AETHER APEX V133.0", page_icon="🏛️")
+st.set_page_config(layout="wide", page_title="AETHER APEX V134.0", page_icon="🏛️")
 
 st.markdown("""
     <style>
@@ -97,6 +97,19 @@ ETF_INFO = {
     "IBIT": {"area": "Bitcoin ETF", "stocks": ["MSTR", "COIN"]},
     "REZ": {"area": "Konut GYO", "stocks": ["AVB", "EQR"]},
     "VNQ": {"area": "Genel GYO", "stocks": ["PLD", "AMT", "O"]}
+}
+
+# ==========================================
+# YENİ: FUTURE THEMES KATEGORİ HARİTASI
+# ==========================================
+FUTURE_THEMES_MAP = {
+    "Agentic AI & Yazılım": ["NOW", "ADEA", "DOCN", "SOUN", "TDIC", "ADBE", "DT", "S", "EXTR"],
+    "Uzay Bilişimi (Space Computing)": ["PL", "BKSY", "SATL", "SPIR", "RKLB", "RDW", "VOYG", "VELO", "ASTS", "SIDU", "MNTS"],
+    "Humanoid & Robotik Algı": ["MBLY", "AEVA", "OUST", "CGNX", "NOVT", "RR", "INDI", "ZBRA", "KLIC", "XPEV", "NEO", "VPG", "LASR", "LPK"],
+    "Neocloud & Enerji Pivotu": ["IREN", "NBIS", "DGXX", "APLD", "CIFR", "WULF", "CORZ", "BTDR", "CLSK", "MARA", "RIOT"],
+    "Çip Mimarisi & Fotonik": ["NVDA", "ARM", "ASML", "LRCX", "KLAC", "TSM", "INTC", "AMD", "CDNS", "SNPS", "MU", "SNDK", "AMKR", "ASX", "ALAB", "MCHP", "RMBS", "COHR", "LITE", "APH", "AXTI", "AAOI", "SIVE", "POET"],
+    "Güç, Soğutma & Altyapı": ["VRT", "ETN", "MPWR", "ADI", "DELL", "SMCI", "PENG", "SLNH", "FCEL", "FLNC", "NVTS", "WOLF"],
+    "Nükleer & Temel Materyal": ["CEG", "TLN", "SMR", "NNE", "UUUU", "MP", "CRML", "ATLX", "BMNR"]
 }
 
 SYSTEM_TRIGGERS = {
@@ -431,13 +444,14 @@ with st.spinner("Piyasa Radar Kontrolü (Bilanço & Değer)..."):
     if not urgent_earn.empty:
         st.warning(f"🔔 **YAKLAŞAN BİLANÇO DİKKAT:** {', '.join(urgent_earn['Ticker'].tolist())} hisselerinin bilançosuna 7 günden az kaldı! Volatilite artabilir.")
 
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🌐 MAKRO & OPEX", 
     "🔋 OMNI-MATRIX (Piller)",
     "🦅 KUŞBAKIŞI (Sektör Sinyalleri)",
     "🦈 HAFTALIK MOMENTUM-GAP",
     "🚨 4H & OMNI RADAR",
-    "📋 MÜKEMMEL PORTFÖY"
+    "📋 MÜKEMMEL PORTFÖY",
+    "🚀 FUTURE THEMES"
 ])
 
 # ---------------------------------------------------------
@@ -505,7 +519,7 @@ with tab2:
                                 draw_etf_battery(row['ETF'], row['RSI'], row['RSI_1D'], row['RSI_1W'], row['Renk'], row['Delta_Icon'], info_str)
 
 # ---------------------------------------------------------
-# TAB 3: 🦅 KUŞBAKIŞI PARA AKIŞI LİSTESİ (YENİ)
+# TAB 3: 🦅 KUŞBAKIŞI PARA AKIŞI LİSTESİ & ETF DRILL-DOWN
 # ---------------------------------------------------------
 with tab3:
     st.subheader("🦅 KUŞBAKIŞI: Sektör & Alt Sektör Para Akışı Radar Tablosu")
@@ -515,12 +529,28 @@ with tab3:
         df_bird = calculate_signals(all_etfs_to_scan, interval="1d")
         if not df_bird.empty:
             df_bird['Kapsam'] = df_bird['Ticker'].map(etf_name_map)
-            # Kolon Sıralaması ve Formatlama
             df_bird_disp = df_bird[['Kapsam', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
             st.dataframe(
                 df_bird_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
-                use_container_width=True, height=750, hide_index=True
+                use_container_width=True, height=400, hide_index=True
             )
+
+    st.divider()
+    st.subheader("🔬 ETF Röntgeni (Bileşen Drill-Down)")
+    st.markdown("Yukarıdaki ETF'lerden birini seçerek içindeki hisselerin anlık para akış durumunu (Whale Re-Entry, Vola Hole vb.) incele.")
+    
+    selected_etf = st.selectbox("İçeriğini görmek istediğiniz tematik ETF'i seçin:", sorted(list(ETF_INFO.keys())))
+    if selected_etf:
+        etf_stocks = ETF_INFO[selected_etf]['stocks']
+        st.info(f"**{selected_etf}** ({ETF_INFO[selected_etf]['area']}) sepetindeki {len(etf_stocks)} hisse analiz ediliyor...")
+        with st.spinner(f"{selected_etf} bileşenleri taranıyor..."):
+            df_etf_components = calculate_signals(etf_stocks, interval="1d")
+            if not df_etf_components.empty:
+                df_etf_comp_disp = df_etf_components[['Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
+                st.dataframe(
+                    df_etf_comp_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                    use_container_width=True, hide_index=True
+                )
 
 # ---------------------------------------------------------
 # TAB 4: HAFTALIK MOMENTUM-GAP
@@ -534,13 +564,10 @@ with tab4:
     """)
     
     with st.spinner("1W Kinetik Boşluklar aranıyor (Tüm Evren)..."):
-        # Boş kalmasın diye PORTFÖY + TÜM ETF'LER aynı anda taranıyor
         all_universe = list(set(all_etfs_to_scan + portfolio_tickers))
         df_wk = calculate_signals(all_universe, interval="1wk")
         if not df_wk.empty:
             df_wk['Kapsam'] = df_wk['Ticker'].map(etf_name_map).fillna("Hisse (Portföy)")
-            
-            # Öncelikli Sinyalleri Yukarı Almak İçin Sıralama Manipülasyonu
             df_wk['Sort_Priority'] = df_wk['Sinyal'].apply(lambda x: 0 if 'GAP' in x else (1 if 'ACCUMULATION' in x else (2 if 'DEEP' in x else 3)))
             df_wk = df_wk.sort_values(by=['Sort_Priority', 'Fusion'], ascending=[True, False]).drop(columns=['Sort_Priority'])
             
@@ -606,4 +633,33 @@ with tab6:
             st.dataframe(
                 df_port_final.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
                 use_container_width=True, height=750, hide_index=True
+            )
+
+# ---------------------------------------------------------
+# TAB 7: YENİ - FUTURE THEMES
+# ---------------------------------------------------------
+with tab7:
+    st.subheader("🚀 FUTURE THEMES: Geleceğin Teknolojileri & Chokepoint Şirketleri")
+    st.markdown("Uzay bilişimi (Space Computing), Agentic AI, Neocloud operatörleri, Fotonik darboğazları ve Humanoid robotik gibi geleceğin devasa mega-temalarının günlük para akışı taraması.")
+    
+    future_ticker_to_cat = {}
+    for cat, tkrs in FUTURE_THEMES_MAP.items():
+        for t in tkrs:
+            future_ticker_to_cat[t] = cat
+            
+    future_tickers = list(future_ticker_to_cat.keys())
+    
+    with st.spinner("Future Themes (Gelecek Temaları) evreni taranıyor..."):
+        df_future = calculate_signals(future_tickers, interval="1d")
+        if not df_future.empty:
+            df_future['Tema / Katman'] = df_future['Ticker'].map(future_ticker_to_cat)
+            df_future = df_future[['Tema / Katman', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
+            
+            # Aksiyon gerektiren sinyalleri tablonun en üstüne taşıyan önceliklendirme algoritması
+            df_future['Sort_Priority'] = df_future['Sinyal'].apply(lambda x: 0 if 'WHALE' in x else (1 if 'HYPER' in x else (2 if 'HOLE' in x else (3 if 'BUY' in x else 4))))
+            df_future = df_future.sort_values(by=['Sort_Priority', 'Fusion'], ascending=[True, False]).drop(columns=['Sort_Priority'])
+            
+            st.dataframe(
+                df_future.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                use_container_width=True, height=800, hide_index=True
             )
