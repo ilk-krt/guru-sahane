@@ -10,7 +10,7 @@ import calendar
 # ==========================================
 # 0. AYARLAR & AGRESİF DARK MODE CSS
 # ==========================================
-st.set_page_config(layout="wide", page_title="AETHER APEX V132.0", page_icon="🏛️")
+st.set_page_config(layout="wide", page_title="AETHER APEX V133.0", page_icon="🏛️")
 
 st.markdown("""
     <style>
@@ -216,7 +216,6 @@ def fetch_matrix_data():
             if len(df) < 25: continue
             close = df['Close']
             
-            # Gelişmiş Pil Hafıza Sistemi (Günlük ve Haftalık RSI)
             rsi_series = get_rsi(close, 14)
             r14_current = rsi_series.iloc[-1]
             r14_1d_ago = rsi_series.iloc[-2] if len(rsi_series) > 1 else r14_current
@@ -231,7 +230,6 @@ def fetch_matrix_data():
             elif r14_current < 35: state, color = "Vakum (Contrarian Fırsat)", "#00ff88"
             else: state, color = "Sıkışma (VCP)", "#f1c40f"
             
-            # Delta İkonu Belirleme (1 Günlük momentuma göre)
             delta_icon = "⬆️" if r14_current > r14_1d_ago else "⬇️" if r14_current < r14_1d_ago else "➖"
             
             matrix_results.append({
@@ -418,8 +416,14 @@ def style_percentages(val):
 # ==========================================
 st.title("🏛️ AETHER APEX: THEMATIC & MOMENTUM ARCHITECT")
 
+# İzleme Evreni (Ana Sektörler + ETF'ler + Portföy Hisseleri)
+all_etfs_to_scan = list(MAIN_SECTORS.keys()) + list(ETF_INFO.keys())
 raw_tickers = ["NVDA", "AMD", "TSM", "ASML", "AVGO", "ARM", "AXTI", "SMCI", "AI", "GOOG", "META", "IONQ", "NBIS", "ADBE", "DT", "S", "EXTR", "OUST", "ONDS", "RKLB", "SIDU", "SPIR", "BKSY", "SATL", "SPCE", "RTX", "KTOS", "SMR", "NNE", "CEG", "TLN", "BKR", "ASTI", "IREN", "WULF", "SLNH", "HIMS", "TDOC", "OSCR", "AMGN", "PFE", "GMAB", "CLPT", "IINN", "QCLS", "PYPL", "MA", "PGY", "OPEN", "CRML", "ATLX", "BMNR", "STLA", "CARR", "CPRT", "GRAB", "SFM", "HITI", "TRUG", "SBET", "T", "P", "SILJ", "PPLT", "PALL", "COPX", "GDXJ", "UFO", "BULL", "CRM", "SNOW", "NOW", "LMT", "CIFR", "VST", "DGXX"]
 portfolio_tickers = sorted(list(set(raw_tickers)))
+
+# Kapsam Eşleştirici Sözlük
+etf_name_map = {k: v for k, v in MAIN_SECTORS.items()}
+for k, v in ETF_INFO.items(): etf_name_map[k] = f"Alt Sektör: {v['area']}"
 
 with st.spinner("Piyasa Radar Kontrolü (Bilanço & Değer)..."):
     df_alerts = fetch_fundamental_data(portfolio_tickers)
@@ -427,9 +431,10 @@ with st.spinner("Piyasa Radar Kontrolü (Bilanço & Değer)..."):
     if not urgent_earn.empty:
         st.warning(f"🔔 **YAKLAŞAN BİLANÇO DİKKAT:** {', '.join(urgent_earn['Ticker'].tolist())} hisselerinin bilançosuna 7 günden az kaldı! Volatilite artabilir.")
 
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🌐 MAKRO & OPEX", 
-    "🔋 OMNI-MATRIX (Piller)", 
+    "🔋 OMNI-MATRIX (Piller)",
+    "🦅 KUŞBAKIŞI (Sektör Sinyalleri)",
     "🦈 HAFTALIK MOMENTUM-GAP",
     "🚨 4H & OMNI RADAR",
     "📋 MÜKEMMEL PORTFÖY"
@@ -458,7 +463,7 @@ with tab1:
 # ---------------------------------------------------------
 with tab2:
     st.subheader("🔋 Tüm Sektörler Pil Enerjisi & Contrarian Matris")
-    st.markdown("Trade the theme you have, not the theme you want. Hangi temanın pili şarj oluyor? Hangi tema Volatilite Vakumuna (Hole) düştü? Bir bakışta gör.")
+    st.markdown("Trade the theme you have, not the theme you want. Hangi temanın pili şarj oluyor? Hangi tema Volatilite Vakumuna (Hole) düştü?")
     
     with st.spinner("Tüm Matrix ve Pil verileri hesaplanıyor..."):
         df_m = fetch_matrix_data()
@@ -486,11 +491,8 @@ with tab2:
             fig.update_layout(title="Gerçek Zamanlı Tematik Enerji Matrisi", xaxis_title="Bollinger Bant Genişliği (Sola yaklaştıkça patlamaya hazır VCP)", yaxis_title="RSI (Hacimsel Enerji Yükü)", height=550, paper_bgcolor="#050505", plot_bgcolor="#111", font=dict(color="#e0e0e0"))
             st.plotly_chart(fig, use_container_width=True)
 
-            # --- YENİ EKLENEN BÖLÜM: TÜM ETF'LERİN DETAYLI PİL DURUMU ---
             st.divider()
             st.subheader("🔋 Alt Sektör & ETF Pil Derinliği (Günlük / Haftalık Momentum)")
-            st.markdown("Her bir ETF'nin güncel hacim-enerji şarj durumu, 1 Günlük (1D) ve 1 Haftalık (1W) önceki seviyelerine kıyasla gösterilmektedir.")
-
             for theme, etfs in GLOBAL_MAP.items():
                 theme_df = df_m[df_m['ETF'].isin(etfs)]
                 if not theme_df.empty:
@@ -503,36 +505,62 @@ with tab2:
                                 draw_etf_battery(row['ETF'], row['RSI'], row['RSI_1D'], row['RSI_1W'], row['Renk'], row['Delta_Icon'], info_str)
 
 # ---------------------------------------------------------
-# TAB 3: HAFTALIK MOMENTUM-GAP
+# TAB 3: 🦅 KUŞBAKIŞI PARA AKIŞI LİSTESİ (YENİ)
 # ---------------------------------------------------------
 with tab3:
-    st.subheader("🦈 Haftalık Momentum-Gap Avcısı (VCP & Lunge)")
-    st.markdown("""
-        **Kurallar:** 1. **Prior Momentum:** Geçmiş iki haftada yavaş yavaş yükselen dipler ve tepeler oluşturması (Swimming like sharks).
-        2. **Valid Gap:** Pazartesi açılışıyla geçen haftanın en yüksek değerinin üzerinde gap bırakması (Lunge).
-        3. **Iron Discipline:** Bu sekme sadece **1 Haftalık (1W)** grafikleri tarar. Piyasa gürültüsünü yok sayar.
-    """)
+    st.subheader("🦅 KUŞBAKIŞI: Sektör & Alt Sektör Para Akışı Radar Tablosu")
+    st.markdown("Piyasanın genel yönünü ve kurumsal sermayenin nereye park ettiğini (Günlük Periyot) tek bir listede gör. **Tüm Sektör ve Niş Tematik ETF'lerin** tam listesi.")
     
-    with st.spinner("1W Kinetik Boşluklar aranıyor..."):
-        df_wk = calculate_signals(portfolio_tickers, interval="1wk")
-        if not df_wk.empty:
-            df_wk_disp = df_wk[['Ticker', 'Sinyal', 'Fiyat', 'Whale Power']]
-            st.dataframe(df_wk_disp.style.map(style_signals, subset=['Sinyal']), use_container_width=True, hide_index=True)
+    with st.spinner("Kuşbakışı Tüm Sektörler Taranıyor..."):
+        df_bird = calculate_signals(all_etfs_to_scan, interval="1d")
+        if not df_bird.empty:
+            df_bird['Kapsam'] = df_bird['Ticker'].map(etf_name_map)
+            # Kolon Sıralaması ve Formatlama
+            df_bird_disp = df_bird[['Kapsam', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
+            st.dataframe(
+                df_bird_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                use_container_width=True, height=750, hide_index=True
+            )
 
 # ---------------------------------------------------------
-# TAB 4: 4H & OMNI RADAR
+# TAB 4: HAFTALIK MOMENTUM-GAP
 # ---------------------------------------------------------
 with tab4:
-    st.subheader("🌐 4H SEKTÖR & ALT SEKTÖR RADARI (WHALE & HOLE)")
-    all_etfs_to_scan = list(MAIN_SECTORS.keys()) + list(ETF_INFO.keys())
-    etf_name_map = {k: v for k, v in MAIN_SECTORS.items()}
-    for k, v in ETF_INFO.items(): etf_name_map[k] = f"Alt Sektör: {v['area']}"
+    st.subheader("🦈 Haftalık Momentum-Gap Avcısı (VCP & Lunge)")
+    st.markdown("""
+        **Kurallar:** 1. **Prior Momentum:** Geçmiş iki haftada yavaş yavaş yükselen dipler ve tepeler oluşturması.
+        2. **Valid Gap:** Pazartesi açılışıyla geçen haftanın en yüksek değerinin üzerinde gap bırakması.
+        3. **Iron Discipline:** Bu sekme Tüm Sektörleri, Alt Sektör ETF'lerini ve Hisse Portföyünü tarar. Ekranda ne taranıyor gör diye **⚪ WAIT** (Bekle) durumundakiler de gizlenmez. Sinyaller her zaman en üstte yer alır.
+    """)
+    
+    with st.spinner("1W Kinetik Boşluklar aranıyor (Tüm Evren)..."):
+        # Boş kalmasın diye PORTFÖY + TÜM ETF'LER aynı anda taranıyor
+        all_universe = list(set(all_etfs_to_scan + portfolio_tickers))
+        df_wk = calculate_signals(all_universe, interval="1wk")
+        if not df_wk.empty:
+            df_wk['Kapsam'] = df_wk['Ticker'].map(etf_name_map).fillna("Hisse (Portföy)")
+            
+            # Öncelikli Sinyalleri Yukarı Almak İçin Sıralama Manipülasyonu
+            df_wk['Sort_Priority'] = df_wk['Sinyal'].apply(lambda x: 0 if 'GAP' in x else (1 if 'ACCUMULATION' in x else (2 if 'DEEP' in x else 3)))
+            df_wk = df_wk.sort_values(by=['Sort_Priority', 'Fusion'], ascending=[True, False]).drop(columns=['Sort_Priority'])
+            
+            df_wk_disp = df_wk[['Kapsam', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
+            st.dataframe(
+                df_wk_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                use_container_width=True, height=750, hide_index=True
+            )
 
-    with st.spinner("Sektör ETF'leri 4H periyotta Kuantum Motoru ile taranıyor..."):
+# ---------------------------------------------------------
+# TAB 5: 4H & OMNI RADAR
+# ---------------------------------------------------------
+with tab5:
+    st.subheader("🌐 4H SEKTÖR & ALT SEKTÖR RADARI (WHALE & HOLE)")
+
+    with st.spinner("Sektör ETF'leri 4H periyotta taranıyor..."):
         df_4h_etfs = calculate_signals(all_etfs_to_scan, interval="4h")
         if not df_4h_etfs.empty:
             df_4h_etfs['Sektör Adı'] = df_4h_etfs['Ticker'].map(etf_name_map)
-            df_4h_etfs = df_4h_etfs[['Sektör Adı', 'Ticker', 'Sinyal', 'Fiyat', 'Whale Power', 'Fusion']]
+            df_4h_etfs = df_4h_etfs[['Sektör Adı', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']]
             
             df_whale_4h = df_4h_etfs[df_4h_etfs['Sinyal'] == '🔄 WHALE RE-ENTRY']
             df_hole_4h = df_4h_etfs[df_4h_etfs['Sinyal'] == '🕳️ VOLA HOLE']
@@ -540,10 +568,10 @@ with tab4:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("<h4 style='color: #00bcd4;'>🔄 4H Whale Re-Entry</h4>", unsafe_allow_html=True)
-                st.dataframe(df_whale_4h.style.map(style_signals, subset=['Sinyal']) if not df_whale_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_whale_4h.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']) if not df_whale_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
             with c2:
                 st.markdown("<h4 style='color: #9c27b0;'>🕳️ 4H Volatility Hole</h4>", unsafe_allow_html=True)
-                st.dataframe(df_hole_4h.style.map(style_signals, subset=['Sinyal']) if not df_hole_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_hole_4h.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']) if not df_hole_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
 
     st.divider()
     st.subheader("🚨 OMNI RADAR: Tüm Hisseler Günlük Tarama")
@@ -558,15 +586,15 @@ with tab4:
             col_r1, col_r2 = st.columns(2)
             with col_r1:
                 st.markdown("<h4 style='color: #00bcd4;'>🔄 Günlük Whale Re-Entry</h4>", unsafe_allow_html=True)
-                st.dataframe(df_whale[['Ticker', 'Sinyal', 'Fiyat', 'Fusion']].style.map(style_signals, subset=['Sinyal']) if not df_whale.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_whale[['Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']) if not df_whale.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
             with col_r2:
                 st.markdown("<h4 style='color: #9c27b0;'>🕳️ Günlük Volatility Hole</h4>", unsafe_allow_html=True)
-                st.dataframe(df_hole[['Ticker', 'Sinyal', 'Fiyat', 'Fusion']].style.map(style_signals, subset=['Sinyal']) if not df_hole.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_hole[['Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']) if not df_hole.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------
-# TAB 5: MÜKEMMEL PORTFÖY
+# TAB 6: MÜKEMMEL PORTFÖY
 # ---------------------------------------------------------
-with tab5:
+with tab6:
     st.subheader("📋 Genel Portföy & OMNI Radar İzleme Listesi (Fair Value Analizi)")
     
     with st.spinner("Portföy simülasyonu ve veriler hesaplanıyor..."):
