@@ -67,7 +67,7 @@ ETF_INFO = {
     "HULL": {"area": "Deniz & Konteyner Taşımacılığı", "stocks": ["ZIM", "TRMD", "STNG", "SBLK"]},
     "EUV": {"area": "Litografi Ekosistemi", "stocks": ["ASML", "AMAT", "LRCX", "KLAC"]},
     "COPX": {"area": "Bakır Madenciliği", "stocks": ["FCX", "SCCO", "TECK", "ERO"]},
-    "LIT": {"area": "Lityum Döngüsü", "stocks": ["ALB", "SQM", "TSLA", "LTHM"]},
+    "LIT": {"area": "Lityum Döngüsü", "stocks": ["ALB", "SQM", "TSLA", "ALTM"]},
     "UFO": {"area": "Uzay Ekonomisi", "stocks": ["RKLB", "LUNR", "ASTS", "SPIR"]},
     "SRVR": {"area": "Veri Merkezleri & Kripto Madencilik", "stocks": ["EQIX", "AMT", "DLR", "IREN", "WULF", "SLNH", "CIFR", "DGXX"]},
     "WGMI": {"area": "Kripto Madencilik", "stocks": ["MARA", "RIOT", "CLSK"]},
@@ -84,7 +84,7 @@ ETF_INFO = {
     "ICLN": {"area": "Temiz Enerji", "stocks": ["FSLR", "ENPH", "PLUG", "ASTI"]},
     "XBI": {"area": "Biyoteknoloji", "stocks": ["MRNA", "VRTX", "AMGN", "GILD", "PFE", "GMAB"]},
     "IHI": {"area": "Tıbbi Cihazlar", "stocks": ["ABT", "MDT", "CLPT", "IINN", "QCLS", "HIMS", "TDOC", "OSCR"]},
-    "KRE": {"area": "Bölgesel Bankalar", "stocks": ["NYCB", "WAL", "ZION", "CMA"]},
+    "KRE": {"area": "Bölgesel Bankalar", "stocks": ["FLG", "WAL", "ZION"]},
     "XRT": {"area": "Perakende", "stocks": ["AMZN", "COST", "WMT", "TGT", "GRAB", "SFM", "HITI", "TRUG", "SBET"]},
     "XME": {"area": "Madencilik & Çelik", "stocks": ["FCX", "NUE", "STLD", "AA", "CRML", "ATLX", "BMNR"]},
     "GDX": {"area": "Altın Madencileri", "stocks": ["NEM", "GOLD", "AEM"]},
@@ -99,15 +99,12 @@ ETF_INFO = {
     "VNQ": {"area": "Genel GYO", "stocks": ["PLD", "AMT", "O"]}
 }
 
-# ==========================================
-# YENİ: FUTURE THEMES KATEGORİ HARİTASI
-# ==========================================
 FUTURE_THEMES_MAP = {
     "Agentic AI & Yazılım": ["NOW", "ADEA", "DOCN", "SOUN", "TDIC", "ADBE", "DT", "S", "EXTR"],
     "Uzay Bilişimi (Space Computing)": ["PL", "BKSY", "SATL", "SPIR", "RKLB", "RDW", "VOYG", "VELO", "ASTS", "SIDU", "MNTS"],
-    "Humanoid & Robotik Algı": ["MBLY", "AEVA", "OUST", "CGNX", "NOVT", "RR", "INDI", "ZBRA", "KLIC", "XPEV", "NEO", "VPG", "LASR", "LPK"],
+    "Humanoid & Robotik Algı": ["MBLY", "AEVA", "OUST", "CGNX", "NOVT", "RR", "INDI", "ZBRA", "KLIC", "XPEV", "NEO", "VPG", "LASR"],
     "Neocloud & Enerji Pivotu": ["IREN", "NBIS", "DGXX", "APLD", "CIFR", "WULF", "CORZ", "BTDR", "CLSK", "MARA", "RIOT"],
-    "Çip Mimarisi & Fotonik": ["NVDA", "ARM", "ASML", "LRCX", "KLAC", "TSM", "INTC", "AMD", "CDNS", "SNPS", "MU", "SNDK", "AMKR", "ASX", "ALAB", "MCHP", "RMBS", "COHR", "LITE", "APH", "AXTI", "AAOI", "SIVE", "POET"],
+    "Çip Mimarisi & Fotonik": ["NVDA", "ARM", "ASML", "LRCX", "KLAC", "TSM", "INTC", "AMD", "CDNS", "SNPS", "MU", "SNDK", "AMKR", "ASX", "ALAB", "MCHP", "RMBS", "COHR", "LITE", "APH", "AXTI", "AAOI", "POET"],
     "Güç, Soğutma & Altyapı": ["VRT", "ETN", "MPWR", "ADI", "DELL", "SMCI", "PENG", "SLNH", "FCEL", "FLNC", "NVTS", "WOLF"],
     "Nükleer & Temel Materyal": ["CEG", "TLN", "SMR", "NNE", "UUUU", "MP", "CRML", "ATLX", "BMNR"]
 }
@@ -285,6 +282,23 @@ def calculate_signals(ticker_list, interval="1d"):
             tr = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
             atr14 = get_rma(tr, 14)
 
+            # EFOR KIRILIMI ALGORİTMASI (ŞAHANE V650)
+            i_vwm_len = 14
+            wma_cv = get_wma(close * vol, i_vwm_len)
+            wma_v = get_wma(vol, i_vwm_len).clip(lower=0.001)
+            raw_effort = wma_cv / wma_v
+            eff_price = get_wma(raw_effort, 3)
+
+            price_cross_eff_up = (close > eff_price) & (close.shift(1) <= eff_price.shift(1))
+            price_cross_eff_dn = (close < eff_price) & (close.shift(1) >= eff_price.shift(1))
+
+            # DÜZELTME: Numpy Error engelleyici (Series olarak tutuyoruz)
+            eff_status = pd.Series("➖ NÖTR", index=close.index)
+            eff_status.loc[close > eff_price] = "🟢 POZ"
+            eff_status.loc[close < eff_price] = "🔴 NEG"
+            eff_status.loc[price_cross_eff_up] = "🚀 UP KIRILIM"
+            eff_status.loc[price_cross_eff_dn] = "🩸 DOWN KIRILIM"
+
             c_range_q = (high - low).clip(lower=0.001)
             delta_q = ((close - low) - (high - close)) / c_range_q
             delta_vol_q = (delta_q * vol).rolling(20).mean() / vol.rolling(20).mean().clip(lower=0.001)
@@ -361,7 +375,9 @@ def calculate_signals(ticker_list, interval="1d"):
                 elif (w_pwr_q.iloc[-1] > 80): sig = "🐋 WHALE ACCUMULATION"
                 elif (r14.iloc[-1] < 35): sig = "🕳️ DEEP VALUE (DCA)"
             else:
-                if (any_buy.iloc[-1] & is_hyper_power.iloc[-1]): sig = "☄️ HYPER BUY"
+                if price_cross_eff_up.iloc[-1]: sig = "🚀 UP KIRILIM"
+                elif price_cross_eff_dn.iloc[-1]: sig = "🩸 DOWN KIRILIM"
+                elif (any_buy.iloc[-1] & is_hyper_power.iloc[-1]): sig = "☄️ HYPER BUY"
                 elif (any_sel.iloc[-1] & is_hyper_power.iloc[-1]): sig = "☄️ HYPER SELL"
                 elif whale_re_entry.iloc[-1]: sig = "🔄 WHALE RE-ENTRY"
                 elif vol_hole.iloc[-1]: sig = "🕳️ VOLA HOLE"
@@ -374,11 +390,12 @@ def calculate_signals(ticker_list, interval="1d"):
                 elif any_sel.iloc[-1]: sig = "🔴 SELL"
 
             results.append({
-                "Ticker": t, "Sinyal": sig, "Fiyat": f"${close.iloc[-1]:.2f}",
+                "Ticker": t, "Sinyal": sig, "Efor": eff_status.iloc[-1], "Fiyat": f"${close.iloc[-1]:.2f}",
                 "Whale Power": float(f"{w_pwr_q.iloc[-1]:.1f}"), "Fusion": int(total_score_b.iloc[-1]),
                 "1 Gün (%)": round(pct_1d, 2), "1 Hafta (%)": round(pct_1w, 2)
             })
-        except Exception: continue
+        except Exception: 
+            continue
     
     if results: return pd.DataFrame(results).sort_values(by="Fusion", ascending=False)
     return pd.DataFrame()
@@ -416,13 +433,40 @@ def style_signals(val):
         if 'EXP SELL' in val: return 'background-color: #bf360c; color: white; font-weight: bold;'
         if 'BUY' in val: return 'background-color: #004d40; color: white; font-weight: bold;'
         if 'SELL' in val: return 'background-color: #3e2723; color: white; font-weight: bold;'
+        if 'UP KIRILIM' in val: return 'background-color: #00FF88; color: black; font-weight: bold;'
+        if 'DOWN KIRILIM' in val: return 'background-color: #FF1744; color: white; font-weight: bold;'
         if val == '⛔': return 'background-color: #b71c1c; color: white; font-size: 1.2rem; text-align: center;'
         if val == '✅': return 'background-color: #004d40; color: white; font-size: 1.2rem; text-align: center;'
     return 'background-color: #111111; color: white;'
 
+def style_efor(val):
+    if isinstance(val, str):
+        if '🚀' in val: return 'background-color: #00FF88; color: black; font-weight: bold;'
+        if '🩸' in val: return 'background-color: #FF1744; color: white; font-weight: bold;'
+        if '🟢' in val: return 'color: #00FF88;'
+        if '🔴' in val: return 'color: #FF1744;'
+    return 'color: #888;'
+
 def style_percentages(val):
     if isinstance(val, (float, int)): return f"color: {'#00ff88' if val > 0 else '#ff3333'}; font-weight: bold;"
     return ''
+
+def render_heatmap(df, val_col, title):
+    df_h = df.dropna(subset=[val_col]).sort_values(by=val_col, ascending=False)
+    html = f"<div style='background:#111; padding:15px; border-radius:12px; border: 1px solid #333;'><h4 style='color:#00ff88; text-align:center; margin-bottom:15px; font-family: sans-serif;'>{title}</h4><div style='display: grid; grid-template-columns: repeat(auto-fill, minmax(75px, 1fr)); gap: 6px;'>"
+    for _, row in df_h.iterrows():
+        val = row[val_col]
+        t = row['Ticker']
+        if val > 0: bg, text_col = "#00b800" if val > 2 else "#006400", "#ffffff"
+        elif val < 0: bg, text_col = "#b80000" if val < -2 else "#8b0000", "#ffffff"
+        else: bg, text_col = "#ffffff", "#000000"
+
+        html += f"<div style='background-color: {bg}; color: {text_col}; padding: 10px 2px; border-radius: 6px; text-align: center; display: flex; flex-direction: column; justify-content: center; height: 60px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'>"
+        html += f"<div style='font-size: 0.85rem; font-weight: 800; font-family: monospace;'>{t}</div>"
+        html += f"<div style='font-size: 0.75rem; font-weight: bold;'>{val:.2f}%</div>"
+        html += "</div>"
+    html += "</div></div>"
+    return html
 
 # ==========================================
 # 5. KOKPİT ARAYÜZÜ 
@@ -528,12 +572,23 @@ with tab3:
     with st.spinner("Kuşbakışı Tüm Sektörler Taranıyor..."):
         df_bird = calculate_signals(all_etfs_to_scan, interval="1d")
         if not df_bird.empty:
+            df_bird['1 Gün (%)'] = pd.to_numeric(df_bird['1 Gün (%)'], errors='coerce')
+            df_bird['1 Hafta (%)'] = pd.to_numeric(df_bird['1 Hafta (%)'], errors='coerce')
+
             df_bird['Kapsam'] = df_bird['Ticker'].map(etf_name_map)
-            df_bird_disp = df_bird[['Kapsam', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
+            df_bird_disp = df_bird[['Kapsam', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
             st.dataframe(
-                df_bird_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                df_bird_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
                 use_container_width=True, height=400, hide_index=True
             )
+            
+            st.divider()
+            st.subheader("🗺️ Sektörel Heatmap Matrix (Tüm Alt Sektörler)")
+            c_heat1, c_heat2 = st.columns(2)
+            with c_heat1:
+                st.markdown(render_heatmap(df_bird, '1 Gün (%)', "Günlük (1D) Isı Haritası"), unsafe_allow_html=True)
+            with c_heat2:
+                st.markdown(render_heatmap(df_bird, '1 Hafta (%)', "Haftalık (1W) Isı Haritası"), unsafe_allow_html=True)
 
     st.divider()
     st.subheader("🔬 ETF Röntgeni (Bileşen Drill-Down)")
@@ -546,9 +601,9 @@ with tab3:
         with st.spinner(f"{selected_etf} bileşenleri taranıyor..."):
             df_etf_components = calculate_signals(etf_stocks, interval="1d")
             if not df_etf_components.empty:
-                df_etf_comp_disp = df_etf_components[['Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
+                df_etf_comp_disp = df_etf_components[['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
                 st.dataframe(
-                    df_etf_comp_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                    df_etf_comp_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
                     use_container_width=True, hide_index=True
                 )
 
@@ -571,9 +626,9 @@ with tab4:
             df_wk['Sort_Priority'] = df_wk['Sinyal'].apply(lambda x: 0 if 'GAP' in x else (1 if 'ACCUMULATION' in x else (2 if 'DEEP' in x else 3)))
             df_wk = df_wk.sort_values(by=['Sort_Priority', 'Fusion'], ascending=[True, False]).drop(columns=['Sort_Priority'])
             
-            df_wk_disp = df_wk[['Kapsam', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
+            df_wk_disp = df_wk[['Kapsam', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
             st.dataframe(
-                df_wk_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                df_wk_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
                 use_container_width=True, height=750, hide_index=True
             )
 
@@ -587,7 +642,7 @@ with tab5:
         df_4h_etfs = calculate_signals(all_etfs_to_scan, interval="4h")
         if not df_4h_etfs.empty:
             df_4h_etfs['Sektör Adı'] = df_4h_etfs['Ticker'].map(etf_name_map)
-            df_4h_etfs = df_4h_etfs[['Sektör Adı', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']]
+            df_4h_etfs = df_4h_etfs[['Sektör Adı', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']]
             
             df_whale_4h = df_4h_etfs[df_4h_etfs['Sinyal'] == '🔄 WHALE RE-ENTRY']
             df_hole_4h = df_4h_etfs[df_4h_etfs['Sinyal'] == '🕳️ VOLA HOLE']
@@ -595,10 +650,10 @@ with tab5:
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("<h4 style='color: #00bcd4;'>🔄 4H Whale Re-Entry</h4>", unsafe_allow_html=True)
-                st.dataframe(df_whale_4h.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']) if not df_whale_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_whale_4h.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']) if not df_whale_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
             with c2:
                 st.markdown("<h4 style='color: #9c27b0;'>🕳️ 4H Volatility Hole</h4>", unsafe_allow_html=True)
-                st.dataframe(df_hole_4h.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']) if not df_hole_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_hole_4h.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']) if not df_hole_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
 
     st.divider()
     st.subheader("🚨 OMNI RADAR: Tüm Hisseler Günlük Tarama")
@@ -613,10 +668,10 @@ with tab5:
             col_r1, col_r2 = st.columns(2)
             with col_r1:
                 st.markdown("<h4 style='color: #00bcd4;'>🔄 Günlük Whale Re-Entry</h4>", unsafe_allow_html=True)
-                st.dataframe(df_whale[['Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']) if not df_whale.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_whale[['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']) if not df_whale.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
             with col_r2:
                 st.markdown("<h4 style='color: #9c27b0;'>🕳️ Günlük Volatility Hole</h4>", unsafe_allow_html=True)
-                st.dataframe(df_hole[['Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']) if not df_hole.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_hole[['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']) if not df_hole.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------
 # TAB 6: MÜKEMMEL PORTFÖY
@@ -628,10 +683,10 @@ with tab6:
         df_port = calculate_signals(portfolio_tickers, interval="1d")
         if not df_port.empty:
             df_port_final = pd.merge(df_port, df_alerts[['Ticker', 'Fair Value', 'Bilanço']], on="Ticker", how="left")
-            df_port_final = df_port_final[['Ticker', 'Sinyal', 'Fiyat', 'Fair Value', 'Bilanço', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
+            df_port_final = df_port_final[['Ticker', 'Sinyal', 'Efor', 'Fiyat', 'Fair Value', 'Bilanço', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
             
             st.dataframe(
-                df_port_final.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                df_port_final.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
                 use_container_width=True, height=750, hide_index=True
             )
 
@@ -653,13 +708,13 @@ with tab7:
         df_future = calculate_signals(future_tickers, interval="1d")
         if not df_future.empty:
             df_future['Tema / Katman'] = df_future['Ticker'].map(future_ticker_to_cat)
-            df_future = df_future[['Tema / Katman', 'Ticker', 'Sinyal', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
+            df_future = df_future[['Tema / Katman', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
             
             # Aksiyon gerektiren sinyalleri tablonun en üstüne taşıyan önceliklendirme algoritması
             df_future['Sort_Priority'] = df_future['Sinyal'].apply(lambda x: 0 if 'WHALE' in x else (1 if 'HYPER' in x else (2 if 'HOLE' in x else (3 if 'BUY' in x else 4))))
             df_future = df_future.sort_values(by=['Sort_Priority', 'Fusion'], ascending=[True, False]).drop(columns=['Sort_Priority'])
             
             st.dataframe(
-                df_future.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']),
+                df_future.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
                 use_container_width=True, height=800, hide_index=True
             )
