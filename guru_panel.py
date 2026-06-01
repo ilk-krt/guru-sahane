@@ -6,6 +6,7 @@ import graphviz
 import yfinance as yf
 from datetime import datetime, timedelta
 import calendar
+import time
 
 # ==========================================
 # 0. AYARLAR & AGRESİF DARK MODE CSS
@@ -16,11 +17,11 @@ st.markdown("""
     <style>
     .stApp { background-color: #050505 !important; color: #e0e0e0 !important; }
     p, h1, h2, h3, h4, h5, h6, span, label, div { color: #e0e0e0 !important; }
-    div[data-baseweb="select"] > div { background-color: #1a1a1a !important; color: #ffffff !important; border: 1px solid #444 !important; }
-    div[data-baseweb="popover"] > div { background-color: #1a1a1a !important; }
-    ul[role="listbox"] { background-color: #1a1a1a !important; }
-    ul[role="listbox"] li { color: #ffffff !important; background-color: #1a1a1a !important; }
-    ul[role="listbox"] li:hover { background-color: #333333 !important; color: #00ff88 !important; }
+    div[data-baseweb="select"] > div { background-color: #111111 !important; color: #ffffff !important; border: 1px solid #00ff88 !important; }
+    div[data-baseweb="popover"] > div { background-color: #111111 !important; }
+    ul[role="listbox"] { background-color: #111111 !important; }
+    ul[role="listbox"] li { color: #ffffff !important; background-color: #111111 !important; }
+    ul[role="listbox"] li:hover { background-color: #222222 !important; color: #00ff88 !important; font-weight: bold !important; }
     [data-testid="stTable"], [data-testid="stDataFrame"] { background-color: #111111 !important; }
     th { background-color: #222222 !important; color: #00ff88 !important; border-bottom: 1px solid #444 !important; }
     td { border-bottom: 1px solid #333 !important; color: #ffffff !important; }
@@ -34,72 +35,86 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if 'active_trigger' not in st.session_state: st.session_state.active_trigger = "OPEX PINNING"
+if 'macro_nonce' not in st.session_state: st.session_state.macro_nonce = str(time.time())
+if 'battery_nonce' not in st.session_state: st.session_state.battery_nonce = str(time.time())
 
 # ==========================================
-# 1. NİŞ TEMATİK VERİ HARİTASI (GENİŞLETİLMİŞ)
+# 1. KURUMSAL NİŞ ETF & HİSSE EVRENİ (DERİNLEŞTİRİLMİŞ)
 # ==========================================
 MAIN_SECTORS = {
     "XLK": "Ana Sektör: Teknoloji", "XLI": "Ana Sektör: Sanayi", "XLE": "Ana Sektör: Enerji",
-    "XLV": "Ana Sektör: Sağlık", "XLF": "Ana Sektör: Finans", "XLY": "Ana Sektör: Tüketim",
+    "XLV": "Ana Sektör: Sağlık", "XLF": "Ana Sektör: Finans", "XLY": "Ana Tüketim",
     "XLB": "Ana Sektör: Materyal", "XLC": "Ana Sektör: İletişim", "XLRE": "Ana Sektör: Gayrimenkul",
-    "XLU": "Ana Sektör: Kamu"
+    "XLU": "Ana Sektör: Kamu Hizmetleri"
 }
 
 GLOBAL_MAP = {
-    "Teknoloji (XLK)": ["SMH", "SOXX", "CIBR", "IGV", "BOTZ", "ARKF"],
-    "Enerji & Altyapı": ["XOP", "OIH", "URA", "ICLN", "PAVE", "JOUL", "GASZ", "WATS"],
-    "Robotik & Uzay": ["CBOT", "XAR", "ARKQ", "UFO"],
-    "Biyoteknoloji & Sağlık": ["XBI", "IHI", "ARKG"],
-    "Lojistik & Taşıma": ["HULL", "IYT", "JETS"],
-    "Kozmetik & Tüketim": ["GLAM", "XRT", "XHB"],
-    "Emtia & Materyal": ["XME", "GDX", "LIT", "REMX", "COPX"],
-    "Finans & Kripto": ["KRE", "IBIT", "WGMI"],
-    "Veri Merkezi & GYO": ["SRVR", "REZ", "VNQ"],
-    "Litografi & Yarı İletken": ["EUV"]
+    "Teknoloji (Bulut & AI)": ["XLK", "CLOU", "IGV", "AIQ", "CIBR", "BOTZ"],
+    "Yarı İletken (Çip Mimarisi)": ["SOXX", "SMH", "EUV"],
+    "Enerji & Altyapı": ["XLE", "XOP", "OIH", "XLU", "URA", "ICLN", "PAVE", "JOUL"],
+    "Emtia & Madencilik": ["COPX", "LIT", "REMX", "GDX", "XME"],
+    "Lojistik & Havacılık": ["IYT", "JETS", "HULL"],
+    "Savunma & Uzay": ["XAR", "ARKX", "UFO"],
+    "Finans & Kripto": ["XLF", "KRE", "ARKF", "IBIT", "WGMI"],
+    "Gayrimenkul & Veri Merkezleri": ["XLRE", "REZ", "SRVR", "VNQ"],
+    "Tüketim & Perakende": ["XLY", "XRT", "XHB"],
+    "Sağlık & Genomik": ["XLV", "IHI", "XBI", "ARKG"]
 }
 
 ETF_INFO = {
-    "CBOT": {"area": "Endüstriyel & Humanoid Robotlar", "stocks": ["ISRG", "PATH", "SYM", "ROCK"]},
-    "WATS": {"area": "Batarya & Enerji Depolama", "stocks": ["ENPH", "PLUG", "STEM", "FLNC"]},
-    "GLAM": {"area": "Kozmetik & Cilt Bakımı", "stocks": ["ELF", "EL", "COTY", "ULTA"]},
-    "JOUL": {"area": "Elektrik Altyapısı & Şebeke", "stocks": ["PWR", "ETN", "QUAN", "HUBB"]},
-    "GASZ": {"area": "Doğalgaz & LNG Zinciri", "stocks": ["LNG", "TRGP", "WMB", "OKE"]},
-    "HULL": {"area": "Deniz & Konteyner Taşımacılığı", "stocks": ["ZIM", "TRMD", "STNG", "SBLK"]},
-    "EUV": {"area": "Litografi Ekosistemi", "stocks": ["ASML", "AMAT", "LRCX", "KLAC"]},
-    "COPX": {"area": "Bakır Madenciliği", "stocks": ["FCX", "SCCO", "TECK", "ERO"]},
-    "LIT": {"area": "Lityum Döngüsü", "stocks": ["ALB", "SQM", "TSLA", "ALTM"]},
-    "UFO": {"area": "Uzay Ekonomisi", "stocks": ["RKLB", "LUNR", "ASTS", "SPIR"]},
-    "SRVR": {"area": "Veri Merkezleri & Kripto Madencilik", "stocks": ["EQIX", "AMT", "DLR", "IREN", "WULF", "SLNH", "CIFR", "DGXX"]},
-    "WGMI": {"area": "Kripto Madencilik", "stocks": ["MARA", "RIOT", "CLSK"]},
-    "SMH": {"area": "Yarı İletken Devleri", "stocks": ["NVDA", "TSM", "AVGO", "AMD", "ARM"]},
-    "SOXX": {"area": "Çip Ekosistemi", "stocks": ["TXN", "AMAT", "QCOM", "ADI", "MCHP", "CRDO", "AXTI"]},
-    "BOTZ": {"area": "Endüstriyel AI & Bulut", "stocks": ["ISRG", "SMCI", "AI", "IONQ", "NBIS"]},
-    "CIBR": {"area": "Siber Güvenlik", "stocks": ["PANW", "CRWD", "FTNT", "NET", "ZS", "S", "EXTR", "DT", "OUST", "ONDS"]},
-    "IGV": {"area": "Kurumsal Yazılım", "stocks": ["ADBE", "CRM", "MSFT", "NOW", "SNOW"]},
-    "ARKF": {"area": "FinTech", "stocks": ["COIN", "SQ", "MELI", "PYPL", "MA", "PGY"]},
-    "XAR": {"area": "Uzay Teknolojileri", "stocks": ["RKLB", "SPCE", "SIDU", "SPIR", "BKSY", "SATL"]},
-    "PAVE": {"area": "Altyapı", "stocks": ["ETN", "URI", "DE", "CAT", "CARR"]},
-    "XOP": {"area": "Petrol & Doğalgaz", "stocks": ["XOM", "CVX", "COP", "OXY", "DVN"]},
-    "URA": {"area": "Nükleer Enerji", "stocks": ["CCJ", "SMR", "CEG", "VST", "NNE", "TLN"]},
-    "ICLN": {"area": "Temiz Enerji", "stocks": ["FSLR", "ENPH", "PLUG", "ASTI"]},
-    "XBI": {"area": "Biyoteknoloji", "stocks": ["MRNA", "VRTX", "AMGN", "GILD", "PFE", "GMAB"]},
-    "IHI": {"area": "Tıbbi Cihazlar", "stocks": ["ABT", "MDT", "CLPT", "IINN", "QCLS", "HIMS", "TDOC", "OSCR"]},
-    "KRE": {"area": "Bölgesel Bankalar", "stocks": ["FLG", "WAL", "ZION"]},
-    "XRT": {"area": "Perakende", "stocks": ["AMZN", "COST", "WMT", "TGT", "GRAB", "SFM", "HITI", "TRUG", "SBET"]},
-    "XME": {"area": "Madencilik & Çelik", "stocks": ["FCX", "NUE", "STLD", "AA", "CRML", "ATLX", "BMNR"]},
-    "GDX": {"area": "Altın Madencileri", "stocks": ["NEM", "GOLD", "AEM"]},
-    "OIH": {"area": "Sondaj Ekipmanları", "stocks": ["SLB", "HAL", "BKR", "VLO"]},
-    "IYT": {"area": "Lojistik", "stocks": ["UNP", "UPS", "UBER", "FDX"]},
-    "ARKG": {"area": "Genom", "stocks": ["CRSP", "NTLA"]},
-    "JETS": {"area": "Havacılık", "stocks": ["DAL", "UAL"]},
-    "XHB": {"area": "Ev Yapımı", "stocks": ["LEN", "DHI"]},
-    "REMX": {"area": "Nadir Elementler", "stocks": ["MP"]},
-    "IBIT": {"area": "Bitcoin ETF", "stocks": ["MSTR", "COIN"]},
-    "REZ": {"area": "Konut GYO", "stocks": ["AVB", "EQR"]},
-    "VNQ": {"area": "Genel GYO", "stocks": ["PLD", "AMT", "O"]}
+    # Kamu ve Altyapı
+    "XLU": {"area": "Utilities & Şebeke", "stocks": ["NEE", "SO", "DUK", "CEG", "AEP", "SRE", "D", "ETR", "VST", "XEL"]},
+    "PAVE": {"area": "Altyapı Yenileme", "stocks": ["ETN", "PH", "HUBB", "POWL", "TT", "CARR", "JCI", "URI", "FAST", "GWW", "VMC", "MLM", "EXP", "J", "ACM", "PWR", "EME"]},
+    # Teknoloji ve Bulut
+    "XLK": {"area": "Teknoloji Devleri", "stocks": ["NVDA", "AAPL", "MSFT", "MU", "AVGO", "AMD", "INTC", "CSCO", "PLTR", "AMAT"]},
+    "CLOU": {"area": "Bulut Bilişim", "stocks": ["DOCN", "DDOG", "AKAM", "TWLO", "ZS", "SNOW", "PAYC", "ZM", "NOW", "NET"]},
+    "IGV": {"area": "Yazılım ve SaaS", "stocks": ["MSFT", "CRM", "ORCL", "ADBE", "NOW", "INTU", "WDAY", "PLTR", "PAYC", "SNOW", "DDOG", "DT", "TEAM", "PANW", "CRWD", "NET"]},
+    "CIBR": {"area": "Siber Güvenlik", "stocks": ["CRWD", "PANW", "ZS", "FTNT", "CHKP", "CSCO", "JNPR", "OKTA", "CYBR", "TENB", "QLYS", "GEN", "NET", "AKAM"]},
+    "BOTZ": {"area": "Robotik ve Endüstriyel AI", "stocks": ["NVDA", "ISRG", "PATH", "AI", "CGNX", "ABBN", "ROK"]},
+    "AIQ": {"area": "Global Yapay Zekâ", "stocks": ["000660.KS", "MU", "005930.KS", "INTC", "AMD", "CSCO", "AVGO", "NVDA", "TSM", "GOOGL", "AAPL"]},
+    # Yarı İletkenler
+    "SOXX": {"area": "Çip Tasarım ve Ekipman", "stocks": ["MU", "AMD", "INTC", "AVGO", "NVDA", "MRVL", "AMAT", "QCOM", "MPWR", "TXN", "ADI", "MCHP", "NXPI", "LRCX", "KLAC"]},
+    "SMH": {"area": "Global Çip Dökümhaneleri", "stocks": ["TSM", "INTC", "ASML", "NVDA", "AMD", "AVGO", "MRVL", "QCOM", "AMAT", "LRCX", "KLAC", "TOELY"]},
+    "EUV": {"area": "Litografi & Fotonik", "stocks": ["TSM", "ASML", "GLW", "LRCX", "AMAT", "LITE", "CIEN", "KLAC", "COHR", "MTSI"]},
+    # Uzay ve Savunma
+    "ARKX": {"area": "Uzay İnovasyonu", "stocks": ["RKLB", "AMD", "LHX", "TER", "KTOS", "DE", "AVAV", "AMZN", "ACHR", "GOOG"]},
+    "XAR": {"area": "Savunma ve Jet Ekipmanları", "stocks": ["LMT", "RTX", "NOC", "GD", "LHX", "TDG", "HWM", "HEI", "SPR", "CW", "TXT", "BWXT", "HII", "PSN"]},
+    "UFO": {"area": "Uydu ve Uzay Ekonomisi", "stocks": ["SIRI", "IRDM", "SATS", "VSAT", "GRMN", "LMT", "BA", "NOC", "LHX", "RKLB", "SPCE"]},
+    # Enerji, Uranyum ve Madenler
+    "XLE": {"area": "Entegre Enerji Devleri", "stocks": ["XOM", "CVX", "COP", "EOG", "OXY", "DVN", "SLB", "BKR", "HAL", "MPC", "VLO", "PSX", "WMB", "OKE", "KMI"]},
+    "XOP": {"area": "Petrol ve Gaz Arama", "stocks": ["FANG", "CTRA", "EQT", "MRO", "APA", "AR", "CHK", "RRC", "MTDR", "COP", "XOM", "CVX", "OXY"]},
+    "OIH": {"area": "Sondaj Ekipmanları", "stocks": ["SLB", "HAL", "BKR", "RIG", "NE", "VAL", "SDRL", "HP", "PTEN", "NBR", "NOV", "CHX", "WHD", "TDW"]},
+    "COPX": {"area": "Bakır Üreticileri", "stocks": ["FCX", "SCCO", "IVPAF", "ANFGY", "LUNMF", "FQVLF", "BHP", "RIO", "TECK", "GLNCY", "VALE"]},
+    "LIT": {"area": "Lityum ve Batarya", "stocks": ["ALB", "SQM", "ALTM", "TSLA", "RIVN", "LCID"]},
+    "URA": {"area": "Uranyum ve Nükleer", "stocks": ["CCJ", "KAP", "NXE", "UEC", "UUUU", "DNN", "BWXT", "LEU", "SMR", "CEG"]},
+    "REMX": {"area": "Nadir Top Elementleri", "stocks": ["MP", "LYSDY", "ALB", "ALTM"]},
+    "GDX": {"area": "Altın Madencileri", "stocks": ["NEM", "GOLD", "AEM", "GFI", "AU", "KGC", "WPM", "FNV", "RGLD", "EGO", "BTG", "HMY", "SBSW"]},
+    "XME": {"area": "Metal ve Çelik Üreticileri", "stocks": ["NUE", "STLD", "CLF", "X", "RS", "AA", "KALU", "FCX", "AMR", "HCC", "ARCH", "HL", "RGLD"]},
+    "ICLN": {"area": "Küresel Temiz Enerji", "stocks": ["ENPH", "FSLR", "SEDG", "VWDRY", "ORSTY", "IBDRY", "NEP", "PLUG", "BE"]},
+    "JOUL": {"area": "Elektrik Altyapısı", "stocks": ["PWR", "ETN", "QUAN", "HUBB"]},
+    # Tüketim, Gayrimenkul, Kripto ve Lojistik
+    "XLY": {"area": "İsteğe Bağlı Tüketim", "stocks": ["AMZN", "EBAY", "TSLA", "F", "GM", "HD", "LOW", "MCD", "SBUX", "MAR", "HLT", "CMG", "NKE", "TJX", "LULU", "BKNG", "ABNB"]},
+    "XRT": {"area": "Perakende", "stocks": ["CVNA", "AMZN", "CHWY", "ANF", "GPS", "BOOT", "ROST", "TJX", "M", "JWN", "COST", "WMT", "TGT", "DLTR", "DG", "AZO", "BBY"]},
+    "XHB": {"area": "Ev İnşaatı ve Malzemeler", "stocks": ["DHI", "LEN", "PHM", "NVR", "TOL", "KBH", "HD", "LOW", "BLDR", "SHW", "WHR", "TT", "MHK", "OC"]},
+    "XLV": {"area": "Sağlık ve Mega İlaç", "stocks": ["LLY", "MRK", "ABBV", "PFE", "BMY", "JNJ", "UNH", "ELV", "HUM", "CVS", "AMGN", "GILD", "REGN", "VRTX", "TMO", "DHR"]},
+    "IHI": {"area": "Tıbbi Cihazlar", "stocks": ["ISRG", "SYK", "BSX", "MDT", "EW", "ZBH", "DXCM", "ABT", "TMO", "BDX"]},
+    "XBI": {"area": "Biyoteknoloji", "stocks": ["VRTX", "AMGN", "GILD", "MRNA", "BIIB", "REGN", "ALNY", "BMRN", "INCY", "UTHR", "EXAS"]},
+    "ARKG": {"area": "Genom ve Kök Hücre", "stocks": ["CRSP", "NTLA", "BEAM", "EDIT", "EXAS", "GH", "TWST", "PACB", "ILMN", "IONS", "ALNY", "SDGR", "RXRX"]},
+    "XLRE": {"area": "Büyük GYO'lar", "stocks": ["PLD", "AMT", "CCI", "SBAC", "EQIX", "DLR", "SPG", "O", "WELL", "VTR", "PSA", "EXR"]},
+    "REZ": {"area": "Konut ve Yaşam GYO", "stocks": ["WELL", "VTR", "OHI", "EQR", "AVB", "UDR", "CPT", "INVH", "AMH", "SUI", "ELS", "PSA", "CUBE"]},
+    "SRVR": {"area": "Veri Merkezi ve Kuleler", "stocks": ["EQIX", "DLR", "AMT", "CCI", "SBAC", "IRM", "UNIT"]},
+    "VNQ": {"area": "Geniş Gayrimenkul Pazarı", "stocks": ["PLD", "AMT", "EQIX", "CCI", "DLR", "SPG", "O", "KIM", "PSA", "AVB", "EQR", "WY", "RYN"]},
+    "XLF": {"area": "Büyük Finans Devleri", "stocks": ["JPM", "BAC", "WFC", "C", "GS", "MS", "BLK", "SCHW", "V", "MA", "AXP", "BRK-B", "MMC", "CB", "PGR"]},
+    "KRE": {"area": "Bölgesel Bankalar", "stocks": ["MTB", "RF", "HBAN", "FITB", "KEY", "CFG", "TFC", "FHN", "WAL", "ZION", "CMA", "NYCB"]},
+    "ARKF": {"area": "Fintek İnovasyonu", "stocks": ["COIN", "HOOD", "SQ", "PYPL", "TOST", "AFRM", "SOFI", "SHOP", "MELI", "SE", "NU", "INTR"]},
+    "XLC": {"area": "İletişim ve Dijital Medya", "stocks": ["META", "GOOGL", "PINS", "NFLX", "DIS", "WBD", "PARA", "TMUS", "T", "VZ", "CMCSA", "CHTR"]},
+    "WGMI": {"area": "Bitcoin Madenciliği", "stocks": ["MARA", "RIOT", "CLSK", "HUT", "CIFR", "IREN", "WULF", "CORZ", "HIVE", "BTDR", "BRPHF", "NVDA", "AMD"]},
+    "IYT": {"area": "Kargo ve Lojistik", "stocks": ["UNP", "CSX", "NSC", "UPS", "FDX", "EXPD", "JBHT", "ODFL", "UBER", "LYFT", "DAL", "UAL", "LUV"]},
+    "JETS": {"area": "Havayolları Ekosistemi", "stocks": ["DAL", "UAL", "AAL", "LUV", "JBLU", "ALK", "ALGT", "ULCC", "SKYW", "BA", "ERJ", "EADSY", "IAG", "DLAKY", "AFLYY"]}
 }
 
 FUTURE_THEMES_MAP = {
+    "Chokepoint (Darboğaz) Çarpanları": ["NVDA", "AVGO", "CEG", "ETN", "EQIX", "FCX", "PLD"],
     "Agentic AI & Yazılım": ["NOW", "ADEA", "DOCN", "SOUN", "TDIC", "ADBE", "DT", "S", "EXTR"],
     "Uzay Bilişimi (Space Computing)": ["PL", "BKSY", "SATL", "SPIR", "RKLB", "RDW", "VOYG", "VELO", "ASTS", "SIDU", "MNTS"],
     "Humanoid & Robotik Algı": ["MBLY", "AEVA", "OUST", "CGNX", "NOVT", "RR", "INDI", "ZBRA", "KLIC", "XPEV", "NEO", "VPG", "LASR"],
@@ -110,9 +125,11 @@ FUTURE_THEMES_MAP = {
 }
 
 SYSTEM_TRIGGERS = {
-    "GAMMA SQUEEZE": {"color": "#00ff88", "battery": {"Stocks": 90, "Bonds": 30, "Crypto": 85, "Commodities": 60, "RealEstate": 70}},
-    "OPEX PINNING": {"color": "#f1c40f", "battery": {"Stocks": 50, "Bonds": 50, "Crypto": 45, "Commodities": 55, "RealEstate": 50}},
-    "GEOPOLITICAL SHOCK": {"color": "#ff3333", "battery": {"Stocks": 30, "Bonds": 80, "Crypto": 25, "Commodities": 95, "RealEstate": 45}}
+    "GAMMA SQUEEZE": {"color": "#00ff88", "battery": {"Stocks": 95, "Bonds": 20, "Crypto": 90, "Commodities": 55, "RealEstate": 65}},
+    "OPEX PINNING": {"color": "#f1c40f", "battery": {"Stocks": 50, "Bonds": 50, "Crypto": 48, "Commodities": 52, "RealEstate": 50}},
+    "GEOPOLITICAL SHOCK": {"color": "#ff3333", "battery": {"Stocks": 25, "Bonds": 85, "Crypto": 35, "Commodities": 95, "RealEstate": 40}},
+    "STAGFLATION / SUPPLY SUPER-CYCLE": {"color": "#e67e22", "battery": {"Stocks": 40, "Bonds": 15, "Crypto": 60, "Commodities": 98, "RealEstate": 75}},
+    "FED HAWKISH PIVOT / LIQUIDITY CRUNCH": {"color": "#9b59b6", "battery": {"Stocks": 15, "Bonds": 90, "Crypto": 10, "Commodities": 35, "RealEstate": 25}}
 }
 
 # ==========================================
@@ -132,39 +149,53 @@ def generate_institutional_news(trigger):
         month = month + 1 if month < 12 else 1
         year = year + 1 if month == 1 else year
         third_friday = get_third_friday(year, month)
-    
+        
     days_to_opex = (third_friday - today).days
     alerts = []
     
     if 0 <= days_to_opex <= 10:
-        alerts.append(f"🚨 **OPEX DYNAMICS (Vadeye {days_to_opex} Gün):** Options expiration (OpEx) is approaching. Market makers are in long gamma. Expect artificial calm and heavy **Strike Pinning**. Breakouts are highly prone to algoritmik whipsaws.")
+        alerts.append(f"🚨 **OPEX DYNAMICS (Vadeye {days_to_opex} Gün):** Options expiration yaklaşıyor. Market Maker'lar long gamma pozisyonunda kilitli. Yapay bir sakinlik ve ağır **Strike Pinning** mekanizması devrede. Kanal kırılımları algoritmik tuzaklara (Whipsaw) aşırı duyarlıdır.")
     elif -3 <= days_to_opex < 0:
-        alerts.append("💥 **GAMMA UNWIND & REBALANCE:** OpEx is over. Dealer hedges are rolling off. Brace for violent **Dealer Gamma Unwinds** and massive **Systematic Flow Rebalances**. Fundamental realities don't matter today.")
+        alerts.append("💥 **GAMMA UNWIND & REBALANCE:** OpEx tamamlandı. Dealer hedge yükümlülükleri eriyor. Sert **Dealer Gamma Unwinds** ve kurumsal **Systematic Flow Rebalances** dalgasına hazırlıklı olun. Temel rasyoların bugün hiçbir önemi yoktur.")
     else:
-        alerts.append(f"📊 **CLEAN FLOW:** No immediate OpEx gravity. Price action is driven by pure Dark Pool supply/demand and thematic **Basket Hedging** execution.")
+        alerts.append(f"📊 **CLEAN FLOW:** OpEx gravitesi zayıf. Fiyat hareketleri tamamen Dark Pool emir blokları ve tematik **Basket Hedging** akışları üzerinden şekilleniyor.")
 
     if trigger == "GEOPOLITICAL SHOCK":
-        alerts.extend(["🌍 **SUPPLY SHOCK:** Geopolitical tension spiking. Systematic funds are executing heavy basket hedging into $HULL (Deniz Lojistiği) and $GASZ (Fosil Enerji).", "🛢️ **CONTRARIAN FLOW:** Growth thesis ignored. Capital is fleeing to hard assets."])
+        alerts.extend(["🌍 **SUPPLY SHOCK:** Jeopolitik tansiyon zirvede. Algoritmik fonlar $HULL (Deniz Lojistiği) ve $GASZ (Doğalgaz) sepetlerine ağır sermaye park ediyor.", "🛢️ **CONTRARIAN FLOW:** Büyüme tezi rafa kalktı. Nakit, emtia ve sert varlıklara sığınıyor."])
     elif trigger == "GAMMA SQUEEZE":
-        alerts.extend(["📈 **FAIR VALUE UPGRADES:** Sell-side analysts just initiated mass re-ratings on AI Infrastructure. Institutional order flow is hunting liquidity in $JOUL and $EUV.", "🤖 **THEME ROTATION:** Relentless bid under $CBOT (Robotik). Smart money is putting size here."])
+        alerts.extend(["📈 **VOLATILITY ACCELERATION:** AI Altyapı ve Çip mimarilerinde kurumsal opsiyon talebi zirvede. Kurumsal emir akışları $JOUL ve $EUV kanallarındaki likiditeyi süpürüyor.", "🤖 **RE-RATING MATRIX:** Akıllı para otonom sistemler ve $CBOT (Robotik) katmanında hacim büyütüyor."])
+    elif trigger == "STAGFLATION / SUPPLY SUPER-CYCLE":
+        alerts.extend(["🌾 **HARD COMMODITIES BOOM:** Arz tedarik darboğazları kalıcı enflasyonu besliyor. Sermaye $COPX (Bakır), $URA (Uranyum) ve $REMX (Nadir Elementler) şebekelerine akıyor.", "💸 **BOND CAPITULATION:** Tahvillerden kaçan para emtia bazlı hisselerin nakit akışını fiyatlıyor."])
+    elif trigger == "FED HAWKISH PIVOT / LIQUIDITY CRUNCH":
+        alerts.extend(["🏛️ **REVERSE REPO DRAIN:** Fed likidite musluklarını sıkıyor. Riskli varlıklardan muazzam bir çıkış var. $IBIT ve yüksek çarpanlı teknoloji hisselerinde margin call riskleri tetikleniyor.", "💵 **CASH IS KING:** Kısa vadeli tahviller ve nakit dışındaki tüm piller deşarj moduna geçti."])
     else:
-        alerts.extend(["⚖️ **EQUITY NEUTRAL:** Market is digesting recent moves. Quantitative funds are deploying statistical arbitrage across pairs. Pure 'Wait and See' mode."])
-    
+        alerts.extend(["⚖️ **EQUITY NEUTRAL:** Piyasa makro kararları konsolide ediyor. Kantitatif fonlar pariteler arası istatistiksel arbitraj (Statistical Arbitrage) çalıştırıyor."])
+        
     return alerts
 
-def draw_battery(label, current, color):
+def draw_battery(label, current, color, delta_1d=0.0, delta_1w=0.0):
+    d1_icon = f"🔺+{delta_1d:.1f}" if delta_1d > 0 else f"🔻{delta_1d:.1f}" if delta_1d < 0 else "➖ 0.0"
+    d1_color = "#00ff88" if delta_1d > 0 else "#ff3333" if delta_1d < 0 else "#888888"
+    
     st.markdown(f"""
-        <div style="margin-bottom: 2px; font-size: 0.85rem; color: #ccc;">{label}</div>
+        <div style="margin-bottom: 2px; font-size: 0.85rem; color: #ccc; display: flex; justify-content: space-between;">
+            <span>{label}</span>
+            <span style="color: {d1_color}; font-weight: bold; font-size: 0.75rem;">1D Değişim: {d1_icon}</span>
+        </div>
         <div class="battery-container" style="height: 20px;">
-            <div class="battery-fill" style="width: {min(current, 100)}%; background-color: {color}; font-size: 0.8rem;">%{int(current)}</div>
+            <div class="battery-fill" style="width: {min(max(current,0), 100)}%; background-color: {color}; font-size: 0.8rem;">%{int(current)}</div>
         </div>
     """, unsafe_allow_html=True)
 
 def draw_etf_battery(label, current, prev_1d, prev_1w, color, delta_icon, info=""):
+    chg_1d = current - prev_1d
+    c1_sign = f"+{chg_1d:.1f}" if chg_1d >= 0 else f"{chg_1d:.1f}"
+    c1_col = "#00ff88" if chg_1d >= 0 else "#ff3333"
+    
     st.markdown(f"""
         <div style="margin-bottom: 2px; font-size: 0.85rem; color: #e0e0e0;">
             <strong>{label}</strong> {info}
-            <span style="font-size:0.75rem; color:#aaa; float:right;">(1D: %{int(prev_1d)} | 1W: %{int(prev_1w)}) {delta_icon}</span>
+            <span style="font-size:0.75rem; float:right; color:{c1_col}; font-weight:bold;">(Δ 1D: %{c1_sign}) {delta_icon}</span>
         </div>
         <div class="battery-container" style="height: 22px; margin-bottom: 12px; border-radius: 6px;">
             <div class="battery-fill" style="width: {min(max(current, 0), 100)}%; background-color: {color}; font-size: 0.8rem;">%{int(current)}</div>
@@ -199,7 +230,7 @@ def draw_smart_money_flow(trigger_data):
     st.graphviz_chart(dot, use_container_width=True)
 
 # ==========================================
-# 3. YFINANCE MATEMATİK & OMNI FUSION
+# 3. YFINANCE MATEMATİK & OMNI FUSION MOTORU
 # ==========================================
 def get_rma(s, period): return s.ewm(alpha=1/period, min_periods=period, adjust=False).mean()
 
@@ -207,16 +238,18 @@ def get_rsi(s, period):
     delta = s.diff()
     ma_up = get_rma(delta.clip(lower=0), period)
     ma_down = get_rma(-1 * delta.clip(upper=0), period)
-    rs = ma_up / ma_down
+    rs = ma_up / ma_down.replace(0, 0.001)
     return 100 - (100 / (1 + rs))
 
 def get_wma(s, period):
     weights = np.arange(1, period + 1)
     return s.rolling(period).apply(lambda x: np.dot(x, weights) / weights.sum(), raw=True)
 
-@st.cache_data(ttl=3600)
-def fetch_matrix_data():
+@st.cache_data
+def fetch_matrix_data(bypass_stamp):
     all_etfs = list(set([etf for etfs in GLOBAL_MAP.values() for etf in etfs]))
+    # Add raw tickers for mapping
+    all_etfs.extend(list(MAIN_SECTORS.keys()))
     end_date = datetime.now()
     raw_data = yf.download(all_etfs, start=end_date - timedelta(days=90), end=end_date, interval="1d", group_by='ticker', progress=False)
     matrix_results = []
@@ -249,8 +282,8 @@ def fetch_matrix_data():
         except: continue
     return pd.DataFrame(matrix_results)
 
-@st.cache_data(ttl=900)
-def calculate_signals(ticker_list, interval="1d"):
+@st.cache_data
+def calculate_signals(ticker_list, interval="1d", bypass_stamp=""):
     if not ticker_list: return pd.DataFrame()
     end_date = datetime.now()
     try:
@@ -282,7 +315,6 @@ def calculate_signals(ticker_list, interval="1d"):
             tr = pd.concat([high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1).max(axis=1)
             atr14 = get_rma(tr, 14)
 
-            # EFOR KIRILIMI ALGORİTMASI (ŞAHANE V650)
             i_vwm_len = 14
             wma_cv = get_wma(close * vol, i_vwm_len)
             wma_v = get_wma(vol, i_vwm_len).clip(lower=0.001)
@@ -292,7 +324,6 @@ def calculate_signals(ticker_list, interval="1d"):
             price_cross_eff_up = (close > eff_price) & (close.shift(1) <= eff_price.shift(1))
             price_cross_eff_dn = (close < eff_price) & (close.shift(1) >= eff_price.shift(1))
 
-            # DÜZELTME: Numpy Error engelleyici (Series olarak tutuyoruz)
             eff_status = pd.Series("➖ NÖTR", index=close.index)
             eff_status.loc[close > eff_price] = "🟢 POZ"
             eff_status.loc[close < eff_price] = "🔴 NEG"
@@ -366,11 +397,9 @@ def calculate_signals(ticker_list, interval="1d"):
             any_sel = total_score_s >= 2
 
             sig = "⚪ WAIT"
-            
             if interval == "1wk":
                 prior_momentum = (low.shift(1) >= low.shift(2)) & (high.shift(1) >= high.shift(2)) & (close.shift(1) > sma20.shift(1))
                 bull_gap = (open_p > high.shift(1)) & (close > open_p)
-                
                 if prior_momentum.iloc[-1] and bull_gap.iloc[-1]: sig = "🚀 MOMENTUM GAP (UP)"
                 elif (w_pwr_q.iloc[-1] > 80): sig = "🐋 WHALE ACCUMULATION"
                 elif (r14.iloc[-1] < 35): sig = "🕳️ DEEP VALUE (DCA)"
@@ -396,11 +425,10 @@ def calculate_signals(ticker_list, interval="1d"):
             })
         except Exception: 
             continue
-    
     if results: return pd.DataFrame(results).sort_values(by="Fusion", ascending=False)
     return pd.DataFrame()
 
-@st.cache_data(ttl=86400)
+@st.cache_data
 def fetch_fundamental_data(ticker_list):
     funds = []
     today = datetime.now().date()
@@ -420,6 +448,7 @@ def fetch_fundamental_data(ticker_list):
         except: funds.append({"Ticker": t, "Fair Value": "N/A", "Bilanço": "N/A", "DaysToEarn": 999})
     return pd.DataFrame(funds)
 
+# --- STYLER YARDIMCILARI ---
 def style_signals(val):
     if isinstance(val, str):
         if 'GAP' in val: return 'background-color: #00e676; color: black; font-weight: bold;'
@@ -443,8 +472,8 @@ def style_efor(val):
     if isinstance(val, str):
         if '🚀' in val: return 'background-color: #00FF88; color: black; font-weight: bold;'
         if '🩸' in val: return 'background-color: #FF1744; color: white; font-weight: bold;'
-        if '🟢' in val: return 'color: #00FF88;'
-        if '🔴' in val: return 'color: #FF1744;'
+        if '🟢' in val: return 'color: #00FF88; font-weight: bold;'
+        if '🔴' in val: return 'color: #FF1744; font-weight: bold;'
     return 'color: #888;'
 
 def style_percentages(val):
@@ -460,7 +489,6 @@ def render_heatmap(df, val_col, title):
         if val > 0: bg, text_col = "#00b800" if val > 2 else "#006400", "#ffffff"
         elif val < 0: bg, text_col = "#b80000" if val < -2 else "#8b0000", "#ffffff"
         else: bg, text_col = "#ffffff", "#000000"
-
         html += f"<div style='background-color: {bg}; color: {text_col}; padding: 10px 2px; border-radius: 6px; text-align: center; display: flex; flex-direction: column; justify-content: center; height: 60px; box-shadow: 0 2px 4px rgba(0,0,0,0.3);'>"
         html += f"<div style='font-size: 0.85rem; font-weight: 800; font-family: monospace;'>{t}</div>"
         html += f"<div style='font-size: 0.75rem; font-weight: bold;'>{val:.2f}%</div>"
@@ -469,16 +497,15 @@ def render_heatmap(df, val_col, title):
     return html
 
 # ==========================================
-# 5. KOKPİT ARAYÜZÜ 
+# 5. KOKPİT ARAYÜZÜ ATEŞLEME
 # ==========================================
-st.title("🏛️ AETHER APEX: THEMATIC & MOMENTUM ARCHITECT")
-
-# İzleme Evreni (Ana Sektörler + ETF'ler + Portföy Hisseleri)
 all_etfs_to_scan = list(MAIN_SECTORS.keys()) + list(ETF_INFO.keys())
 raw_tickers = ["NVDA", "AMD", "TSM", "ASML", "AVGO", "ARM", "AXTI", "SMCI", "AI", "GOOG", "META", "IONQ", "NBIS", "ADBE", "DT", "S", "EXTR", "OUST", "ONDS", "RKLB", "SIDU", "SPIR", "BKSY", "SATL", "SPCE", "RTX", "KTOS", "SMR", "NNE", "CEG", "TLN", "BKR", "ASTI", "IREN", "WULF", "SLNH", "HIMS", "TDOC", "OSCR", "AMGN", "PFE", "GMAB", "CLPT", "IINN", "QCLS", "PYPL", "MA", "PGY", "OPEN", "CRML", "ATLX", "BMNR", "STLA", "CARR", "CPRT", "GRAB", "SFM", "HITI", "TRUG", "SBET", "T", "P", "SILJ", "PPLT", "PALL", "COPX", "GDXJ", "UFO", "BULL", "CRM", "SNOW", "NOW", "LMT", "CIFR", "VST", "DGXX"]
+# ETF bileşenlerini de ana portföye dahil et (Dinamik Tarama İçin)
+for k, v in ETF_INFO.items():
+    raw_tickers.extend(v['stocks'])
 portfolio_tickers = sorted(list(set(raw_tickers)))
 
-# Kapsam Eşleştirici Sözlük
 etf_name_map = {k: v for k, v in MAIN_SECTORS.items()}
 for k, v in ETF_INFO.items(): etf_name_map[k] = f"Alt Sektör: {v['area']}"
 
@@ -486,7 +513,7 @@ with st.spinner("Piyasa Radar Kontrolü (Bilanço & Değer)..."):
     df_alerts = fetch_fundamental_data(portfolio_tickers)
     urgent_earn = df_alerts[(df_alerts['DaysToEarn'] >= 0) & (df_alerts['DaysToEarn'] <= 7)]
     if not urgent_earn.empty:
-        st.warning(f"🔔 **YAKLAŞAN BİLANÇO DİKKAT:** {', '.join(urgent_earn['Ticker'].tolist())} hisselerinin bilançosuna 7 günden az kaldı! Volatilite artabilir.")
+        st.warning(f"🔔 **YAKLAŞAN BİLANÇO DİKKAT:** {', '.join(urgent_earn['Ticker'].tolist())} hisselerinin bilançosuna 7 günden az kaldı!")
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🌐 MAKRO & OPEX", 
@@ -499,14 +526,20 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 ])
 
 # ---------------------------------------------------------
-# TAB 1: MAKRO & OPEX KOKPİT
+# TAB 1: GÜÇLENDİRİLMİŞ MAKRO & OPEX KOKPİT
 # ---------------------------------------------------------
 with tab1:
-    st.subheader("⚙️ Institutional Desk: Gizli Piyasa Mekanikleri")
-    t_cols = st.columns(3)
+    st.subheader("⚙️ Institutional Desk: Gelişmiş Makro Tetikleyiciler & Likidite Akışları")
+    
+    col_refresh, col_empty = st.columns([1, 4])
+    if col_refresh.button("🔄 Makro Motoru ve Akışı Güncelle", use_container_width=True):
+        st.session_state.macro_nonce = str(time.time())
+        st.success("Makro akış simülatörü sıfırlandı!")
+        
+    t_cols = st.columns(5)
     for i, trig in enumerate(SYSTEM_TRIGGERS.keys()):
         with t_cols[i]:
-            if st.button(f"Senaryo: {trig}", use_container_width=True):
+            if st.button(f"Tetikleyici: {trig}", use_container_width=True):
                 st.session_state.active_trigger = trig
 
     alerts = generate_institutional_news(st.session_state.active_trigger)
@@ -514,24 +547,57 @@ with tab1:
         st.markdown(f"<div style='border-left: 3px solid {SYSTEM_TRIGGERS[st.session_state.active_trigger]['color']}; padding-left: 10px; margin-bottom: 10px; font-size:1rem; background-color:#1a1a1a; padding:10px; border-radius:5px;'>{alert}</div>", unsafe_allow_html=True)
     
     st.divider()
-    draw_smart_money_flow(SYSTEM_TRIGGERS[st.session_state.active_trigger])
+    
+    col_chart, col_docs = st.columns([3, 2])
+    
+    with col_chart:
+        st.markdown(f"#### 💸 **Sermaye Akış Rotası:** ({st.session_state.active_trigger})")
+        draw_smart_money_flow(SYSTEM_TRIGGERS[st.session_state.active_trigger])
+        
+    with col_docs:
+        st.markdown("""
+        <div style="background-color: #111; padding: 20px; border-radius: 10px; border: 1px solid #333;">
+            <h4 style="color: #00ff88; margin-top: 0;">📚 Kurumsal Piyasa Mekanikleri Kontrol Listesi</h4>
+            <hr style="border-color: #222;">
+            <p><strong>1. GAMMA SQUEEZE MEKANİĞİ</strong></p>
+            <p style="font-size: 0.85rem; color: #b0b0b0;">
+                Bireysel ve kurumsal aktörlerin yoğun şekilde Out-of-the-Money (Kâr Dışı) Call opsiyon almasıyla tetiklenir. Opsiyonu satan piyasa yapıcılar (Dealers), delta risklerini sıfırlamak için spot piyasadan agresif hisse almak zorunda kalır. Fiyat yükseldikçe deltanın ivmelenmesi (Gamma Tepesi) dealer'ları daha fazla hisse almaya zorlar ve dikey, parabolik bir yükseliş döngüsü (Melt-Up) oluşur.
+            </p>
+            <p style="font-size: 0.85rem; color: #00ff88;">
+                <em>Strategic Implication:</em> Momentum tavan yapar, hacim ortalamaları katlanır. Teknikte 1 periyot teyitli EMA kırılımları ve Whale Power indikatörünün %85 üzerine fırlaması bu akışı doğrular. Kapanış odaklı (Close-only) zirve kırılımları izlenmelidir.
+            </p>
+            <hr style="border-color: #222; margin-top: 15px;">
+            <p><strong>2. OPEX PINNING MEKANİĞİ</strong></p>
+            <p style="font-size: 0.85rem; color: #b0b0b0;">
+                Her ayın 3. Cuma günü gerçekleşen opsiyon vadelerinin (OpEx) yaklaşmasıyla oluşur. Yoğun açık pozisyon (Open Interest) bulunan büyük strike (kullanım) fiyatlarında, piyasa yapıcıların 'Long Gamma' profilinde olması fiyatı o seviyeye doğru çeker ve hapseder. Piyasa yapıcı fiyat yükselirken satıp düşerken alarak volatiliteyi yapay olarak baskılar (Gravity Effect).
+            </p>
+            <p style="font-size: 0.85rem; color: #f1c40f;">
+                <em>Strategic Implication:</em> Vadeye 10 gün kala hacim düşer, endeksler sıkışır (VCP yapısı). Kırılım yönlü sinyaller genellikle sahtedir (Whipsaw tuzu). Gerçek trend vade sonrasındaki kurumsal portföy dengelenmeleriyle (Gamma Unwind) başlar.
+            </p>
+        </div>
+        """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# TAB 2: OMNI-MATRIX (TÜM PİLLER & SCATTER)
+# TAB 2: DELTA ENTEGRELİ OMNI-MATRIX (PİLLER)
 # ---------------------------------------------------------
 with tab2:
-    st.subheader("🔋 Tüm Sektörler Pil Enerjisi & Contrarian Matris")
-    st.markdown("Trade the theme you have, not the theme you want. Hangi temanın pili şarj oluyor? Hangi tema Volatilite Vakumuna (Hole) düştü?")
+    st.subheader("🔋 Tüm Sektörler Pil Enerjisi & Contrarian Değişim Matrisi")
     
-    with st.spinner("Tüm Matrix ve Pil verileri hesaplanıyor..."):
-        df_m = fetch_matrix_data()
+    col_ref2, col_emp2 = st.columns([1, 4])
+    if col_ref2.button("🔄 Pil Enerji Matrisini Sıfırla ve Güncelle", use_container_width=True):
+        st.session_state.battery_nonce = str(time.time())
+        st.success("Tüm piller ve matris verileri yfinance'tan yeniden çekildi!")
+        
+    with st.spinner("Tüm Matrix ve Dönemsel Pil Değişimleri Hesaplanıyor..."):
+        df_m = fetch_matrix_data(st.session_state.battery_nonce)
         if not df_m.empty:
-            theme_avg = df_m.groupby('Sektör')['RSI'].mean().reset_index()
+            theme_avg = df_m.groupby('Sektör')[['RSI', 'RSI_1D', 'RSI_1W']].mean().reset_index()
             cols = st.columns(4)
             for i, row in theme_avg.iterrows():
                 with cols[i % 4]:
+                    delta_1d_calc = row['RSI'] - row['RSI_1D']
                     col = "#00ff88" if row['RSI'] > 60 else "#ff3333" if row['RSI'] < 40 else "#f1c40f"
-                    draw_battery(row['Sektör'], row['RSI'], col)
+                    draw_battery(row['Sektör'], row['RSI'], col, delta_1d=delta_1d_calc)
             
             st.divider()
             
@@ -544,17 +610,17 @@ with tab2:
                     text=df_s["ETF"], textposition="top center", name=state,
                     hovertemplate="<b>%{text}</b><br>Tema: " + df_s["Sektör"] + "<br>Enerji (Flow): %{y:.1f}<br>Sıkışma: %{x:.1f}%<extra></extra>"
                 ))
-            fig.add_hline(y=70, line_dash="dash", line_color="#ff3333", annotation_text="Tehlike (Aşırı Isınma)")
-            fig.add_hline(y=35, line_dash="dash", line_color="#00ff88", annotation_text="Relentless DCA (Dip Toplama)")
-            fig.update_layout(title="Gerçek Zamanlı Tematik Enerji Matrisi", xaxis_title="Bollinger Bant Genişliği (Sola yaklaştıkça patlamaya hazır VCP)", yaxis_title="RSI (Hacimsel Enerji Yükü)", height=550, paper_bgcolor="#050505", plot_bgcolor="#111", font=dict(color="#e0e0e0"))
+            fig.add_hline(y=70, line_dash="dash", line_color="#ff3333", annotation_text="Aşırı Isınma (Dağıtım)")
+            fig.add_hline(y=35, line_dash="dash", line_color="#00ff88", annotation_text="Yükselen Vakum (DCA)")
+            fig.update_layout(title="Dinamik Kurumsal Enerji Matrisi", xaxis_title="Bollinger Bant Genişliği (Sıkışma Katsayısı)", yaxis_title="RSI (Hacimsel Enerji Oranı)", height=500, paper_bgcolor="#050505", plot_bgcolor="#111", font=dict(color="#e0e0e0"))
             st.plotly_chart(fig, use_container_width=True)
 
             st.divider()
-            st.subheader("🔋 Alt Sektör & ETF Pil Derinliği (Günlük / Haftalık Momentum)")
+            st.subheader("🔋 Alt Sektör & ETF Pil Derinliği (Canlı 1D Değişim Deltası ile)")
             for theme, etfs in GLOBAL_MAP.items():
                 theme_df = df_m[df_m['ETF'].isin(etfs)]
                 if not theme_df.empty:
-                    with st.expander(f"📂 {theme} Ekosistemi", expanded=False):
+                    with st.expander(f"📂 {theme} Detay Grubu", expanded=False):
                         cols = st.columns(3)
                         for idx, row in theme_df.reset_index(drop=True).iterrows():
                             with cols[idx % 3]:
@@ -563,18 +629,15 @@ with tab2:
                                 draw_etf_battery(row['ETF'], row['RSI'], row['RSI_1D'], row['RSI_1W'], row['Renk'], row['Delta_Icon'], info_str)
 
 # ---------------------------------------------------------
-# TAB 3: 🦅 KUŞBAKIŞI PARA AKIŞI LİSTESİ & ETF DRILL-DOWN
+# TAB 3: KUŞBAKIŞI PARA AKIŞI LİSTESİ
 # ---------------------------------------------------------
 with tab3:
-    st.subheader("🦅 KUŞBAKIŞI: Sektör & Alt Sektör Para Akışı Radar Tablosu")
-    st.markdown("Piyasanın genel yönünü ve kurumsal sermayenin nereye park ettiğini (Günlük Periyot) tek bir listede gör. **Tüm Sektör ve Niş Tematik ETF'lerin** tam listesi.")
-    
-    with st.spinner("Kuşbakışı Tüm Sektörler Taranıyor..."):
-        df_bird = calculate_signals(all_etfs_to_scan, interval="1d")
+    st.subheader("🦅 Sektör & Alt Sektör Günlük Para Akışı Radar Tablosu")
+    with st.spinner("Kuşbakışı Sektörler Taranıyor..."):
+        df_bird = calculate_signals(all_etfs_to_scan, interval="1d", bypass_stamp=st.session_state.battery_nonce)
         if not df_bird.empty:
             df_bird['1 Gün (%)'] = pd.to_numeric(df_bird['1 Gün (%)'], errors='coerce')
             df_bird['1 Hafta (%)'] = pd.to_numeric(df_bird['1 Hafta (%)'], errors='coerce')
-
             df_bird['Kapsam'] = df_bird['Ticker'].map(etf_name_map)
             df_bird_disp = df_bird[['Kapsam', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
             st.dataframe(
@@ -583,27 +646,20 @@ with tab3:
             )
             
             st.divider()
-            st.subheader("🗺️ Sektörel Heatmap Matrix (Tüm Alt Sektörler)")
             c_heat1, c_heat2 = st.columns(2)
-            with c_heat1:
-                st.markdown(render_heatmap(df_bird, '1 Gün (%)', "Günlük (1D) Isı Haritası"), unsafe_allow_html=True)
-            with c_heat2:
-                st.markdown(render_heatmap(df_bird, '1 Hafta (%)', "Haftalık (1W) Isı Haritası"), unsafe_allow_html=True)
+            with c_heat1: st.markdown(render_heatmap(df_bird, '1 Gün (%)', "Günlük (1D) Isı Haritası"), unsafe_allow_html=True)
+            with c_heat2: st.markdown(render_heatmap(df_bird, '1 Hafta (%)', "Haftalık (1W) Isı Haritası"), unsafe_allow_html=True)
 
     st.divider()
-    st.subheader("🔬 ETF Röntgeni (Bileşen Drill-Down)")
-    st.markdown("Yukarıdaki ETF'lerden birini seçerek içindeki hisselerin anlık para akış durumunu (Whale Re-Entry, Vola Hole vb.) incele.")
-    
     selected_etf = st.selectbox("İçeriğini görmek istediğiniz tematik ETF'i seçin:", sorted(list(ETF_INFO.keys())))
     if selected_etf:
         etf_stocks = ETF_INFO[selected_etf]['stocks']
-        st.info(f"**{selected_etf}** ({ETF_INFO[selected_etf]['area']}) sepetindeki {len(etf_stocks)} hisse analiz ediliyor...")
         with st.spinner(f"{selected_etf} bileşenleri taranıyor..."):
-            df_etf_components = calculate_signals(etf_stocks, interval="1d")
+            df_etf_components = calculate_signals(etf_stocks, interval="1d", bypass_stamp=st.session_state.battery_nonce)
             if not df_etf_components.empty:
-                df_etf_comp_disp = df_etf_components[['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
                 st.dataframe(
-                    df_etf_comp_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
+                    df_etf_components[['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
+                    .style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
                     use_container_width=True, hide_index=True
                 )
 
@@ -612,24 +668,17 @@ with tab3:
 # ---------------------------------------------------------
 with tab4:
     st.subheader("🦈 Haftalık Momentum-Gap Avcısı (VCP & Lunge)")
-    st.markdown("""
-        **Kurallar:** 1. **Prior Momentum:** Geçmiş iki haftada yavaş yavaş yükselen dipler ve tepeler oluşturması.
-        2. **Valid Gap:** Pazartesi açılışıyla geçen haftanın en yüksek değerinin üzerinde gap bırakması.
-        3. **Iron Discipline:** Bu sekme Tüm Sektörleri, Alt Sektör ETF'lerini ve Hisse Portföyünü tarar. Ekranda ne taranıyor gör diye **⚪ WAIT** (Bekle) durumundakiler de gizlenmez. Sinyaller her zaman en üstte yer alır.
-    """)
-    
-    with st.spinner("1W Kinetik Boşluklar aranıyor (Tüm Evren)..."):
+    with st.spinner("1W Kinetik Boşluklar aranıyor..."):
         all_universe = list(set(all_etfs_to_scan + portfolio_tickers))
-        df_wk = calculate_signals(all_universe, interval="1wk")
+        df_wk = calculate_signals(all_universe, interval="1wk", bypass_stamp=st.session_state.battery_nonce)
         if not df_wk.empty:
             df_wk['Kapsam'] = df_wk['Ticker'].map(etf_name_map).fillna("Hisse (Portföy)")
             df_wk['Sort_Priority'] = df_wk['Sinyal'].apply(lambda x: 0 if 'GAP' in x else (1 if 'ACCUMULATION' in x else (2 if 'DEEP' in x else 3)))
             df_wk = df_wk.sort_values(by=['Sort_Priority', 'Fusion'], ascending=[True, False]).drop(columns=['Sort_Priority'])
-            
-            df_wk_disp = df_wk[['Kapsam', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
             st.dataframe(
-                df_wk_disp.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
-                use_container_width=True, height=750, hide_index=True
+                df_wk[['Kapsam', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power']]
+                .style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
+                use_container_width=True, height=600, hide_index=True
             )
 
 # ---------------------------------------------------------
@@ -637,84 +686,61 @@ with tab4:
 # ---------------------------------------------------------
 with tab5:
     st.subheader("🌐 4H SEKTÖR & ALT SEKTÖR RADARI (WHALE & HOLE)")
-
-    with st.spinner("Sektör ETF'leri 4H periyotta taranıyor..."):
-        df_4h_etfs = calculate_signals(all_etfs_to_scan, interval="4h")
+    with st.spinner("Sektör ETF'leri 4H taranıyor..."):
+        df_4h_etfs = calculate_signals(all_etfs_to_scan, interval="4h", bypass_stamp=st.session_state.battery_nonce)
         if not df_4h_etfs.empty:
             df_4h_etfs['Sektör Adı'] = df_4h_etfs['Ticker'].map(etf_name_map)
-            df_4h_etfs = df_4h_etfs[['Sektör Adı', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']]
-            
-            df_whale_4h = df_4h_etfs[df_4h_etfs['Sinyal'] == '🔄 WHALE RE-ENTRY']
-            df_hole_4h = df_4h_etfs[df_4h_etfs['Sinyal'] == '🕳️ VOLA HOLE']
-            
             c1, c2 = st.columns(2)
             with c1:
                 st.markdown("<h4 style='color: #00bcd4;'>🔄 4H Whale Re-Entry</h4>", unsafe_allow_html=True)
-                st.dataframe(df_whale_4h.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']) if not df_whale_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_4h_etfs[df_4h_etfs['Sinyal'] == '🔄 WHALE RE-ENTRY'][['Sektör Adı', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_efor, subset=['Efor']), use_container_width=True, hide_index=True)
             with c2:
                 st.markdown("<h4 style='color: #9c27b0;'>🕳️ 4H Volatility Hole</h4>", unsafe_allow_html=True)
-                st.dataframe(df_hole_4h.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']) if not df_hole_4h.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_4h_etfs[df_4h_etfs['Sinyal'] == '🕳️ VOLA HOLE'][['Sektör Adı', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_efor, subset=['Efor']), use_container_width=True, hide_index=True)
 
     st.divider()
     st.subheader("🚨 OMNI RADAR: Tüm Hisseler Günlük Tarama")
     all_market_stocks = list(set([s for data in ETF_INFO.values() for s in data["stocks"]]))
-    
-    with st.spinner("Tüm piyasa (hisseler) günlük periyotta taranıyor..."):
-        df_radar = calculate_signals(all_market_stocks, interval="1d")
+    with st.spinner("Tüm piyasa günlük taranıyor..."):
+        df_radar = calculate_signals(all_market_stocks, interval="1d", bypass_stamp=st.session_state.battery_nonce)
         if not df_radar.empty:
-            df_whale = df_radar[df_radar['Sinyal'] == '🔄 WHALE RE-ENTRY']
-            df_hole = df_radar[df_radar['Sinyal'] == '🕳️ VOLA HOLE']
-            
             col_r1, col_r2 = st.columns(2)
             with col_r1:
                 st.markdown("<h4 style='color: #00bcd4;'>🔄 Günlük Whale Re-Entry</h4>", unsafe_allow_html=True)
-                st.dataframe(df_whale[['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']) if not df_whale.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_radar[df_radar['Sinyal'] == '🔄 WHALE RE-ENTRY'][['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', 'Whale Power', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_efor, subset=['Efor']), use_container_width=True, hide_index=True)
             with col_r2:
                 st.markdown("<h4 style='color: #9c27b0;'>🕳️ Günlük Volatility Hole</h4>", unsafe_allow_html=True)
-                st.dataframe(df_hole[['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']) if not df_hole.empty else pd.DataFrame(), use_container_width=True, hide_index=True)
+                st.dataframe(df_radar[df_radar['Sinyal'] == '🕳️ VOLA HOLE'][['Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', 'Whale Power', 'Fusion']].style.map(style_signals, subset=['Sinyal']).map(style_efor, subset=['Efor']), use_container_width=True, hide_index=True)
 
 # ---------------------------------------------------------
-# TAB 6: MÜKEMMEL PORTFÖY
+# TAB 6: MÜKEMMEL PORTFÖY CONTROLS
 # ---------------------------------------------------------
 with tab6:
     st.subheader("📋 Genel Portföy & OMNI Radar İzleme Listesi (Fair Value Analizi)")
-    
-    with st.spinner("Portföy simülasyonu ve veriler hesaplanıyor..."):
-        df_port = calculate_signals(portfolio_tickers, interval="1d")
+    with st.spinner("Portföy simülasyonu hesaplanıyor..."):
+        df_port = calculate_signals(portfolio_tickers, interval="1d", bypass_stamp=st.session_state.battery_nonce)
         if not df_port.empty:
             df_port_final = pd.merge(df_port, df_alerts[['Ticker', 'Fair Value', 'Bilanço']], on="Ticker", how="left")
-            df_port_final = df_port_final[['Ticker', 'Sinyal', 'Efor', 'Fiyat', 'Fair Value', 'Bilanço', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
-            
             st.dataframe(
-                df_port_final.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
-                use_container_width=True, height=750, hide_index=True
+                df_port_final[['Ticker', 'Sinyal', 'Efor', 'Fiyat', 'Fair Value', 'Bilanço', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
+                .style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
+                use_container_width=True, height=600, hide_index=True
             )
 
 # ---------------------------------------------------------
-# TAB 7: YENİ - FUTURE THEMES
+# TAB 7: FUTURE THEMES
 # ---------------------------------------------------------
 with tab7:
     st.subheader("🚀 FUTURE THEMES: Geleceğin Teknolojileri & Chokepoint Şirketleri")
-    st.markdown("Uzay bilişimi (Space Computing), Agentic AI, Neocloud operatörleri, Fotonik darboğazları ve Humanoid robotik gibi geleceğin devasa mega-temalarının günlük para akışı taraması.")
-    
-    future_ticker_to_cat = {}
-    for cat, tkrs in FUTURE_THEMES_MAP.items():
-        for t in tkrs:
-            future_ticker_to_cat[t] = cat
-            
-    future_tickers = list(future_ticker_to_cat.keys())
-    
-    with st.spinner("Future Themes (Gelecek Temaları) evreni taranıyor..."):
-        df_future = calculate_signals(future_tickers, interval="1d")
+    future_ticker_to_cat = {t: cat for cat, tkrs in FUTURE_THEMES_MAP.items() for t in tkrs}
+    with st.spinner("Future Themes evreni taranıyor..."):
+        df_future = calculate_signals(list(future_ticker_to_cat.keys()), interval="1d", bypass_stamp=st.session_state.battery_nonce)
         if not df_future.empty:
             df_future['Tema / Katman'] = df_future['Ticker'].map(future_ticker_to_cat)
-            df_future = df_future[['Tema / Katman', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
-            
-            # Aksiyon gerektiren sinyalleri tablonun en üstüne taşıyan önceliklendirme algoritması
-            df_future['Sort_Priority'] = df_future['Sinyal'].apply(lambda x: 0 if 'WHALE' in x else (1 if 'HYPER' in x else (2 if 'HOLE' in x else (3 if 'BUY' in x else 4))))
+            df_future['Sort_Priority'] = df_future['Sinyal'].apply(lambda x: 0 if 'WHALE' in x else (1 if 'HYPER' in x else (2 if 'HOLE' in x else 3)))
             df_future = df_future.sort_values(by=['Sort_Priority', 'Fusion'], ascending=[True, False]).drop(columns=['Sort_Priority'])
-            
             st.dataframe(
-                df_future.style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
-                use_container_width=True, height=800, hide_index=True
+                df_future[['Tema / Katman', 'Ticker', 'Sinyal', 'Efor', 'Fiyat', '1 Gün (%)', '1 Hafta (%)', 'Whale Power', 'Fusion']]
+                .style.map(style_signals, subset=['Sinyal']).map(style_percentages, subset=['1 Gün (%)', '1 Hafta (%)']).map(style_efor, subset=['Efor']),
+                use_container_width=True, height=600, hide_index=True
             )
